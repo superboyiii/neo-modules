@@ -4,7 +4,7 @@
       {
         "Network": 5321327,
         "BindAddress": "127.0.0.1",
-        "Port": 10332,
+        "Port": 21332,
         "SslCert": "",
         "SslCertPassword": "",
         "TrustedAuthorities": [],
