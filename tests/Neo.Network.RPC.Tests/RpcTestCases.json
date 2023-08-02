@@ -3050,46 +3050,166 @@
   {
     "Name": "getapplicationlogasync",
     "Request": {
-        "id": 1,
-        "jsonrpc": "2.0",
-        "method": "getapplicationlog",
-        "params": ["0x15e95fadc4ef93d866799a20505c37c4fe61e1f7115ae4bea8cf7364958839cf"]
+      "jsonrpc": "2.0",
+      "method": "getapplicationlog",
+      "params": [ "0x6ea186fe714b8168ede3b78461db8945c06d867da649852352dbe7cbf1ba3724" ],
+      "id": 1
     },
     "Response": {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "result": {
-            "exception": null,
-            "trigger": "Application",
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "blockhash": "0x6ea186fe714b8168ede3b78461db8945c06d867da649852352dbe7cbf1ba3724",
+        "executions": [
+          {
+            "trigger": "OnPersist",
             "vmstate": "HALT",
-            "gasconsumed": 997778,
+            "gasconsumed": "2031260",
+            "exception": null,
             "stack": [],
             "notifications": [
-                {
-                    "contract": "0xd2a4cff31913016155e38e474a2c06d08be276cf",
-                    "eventname": "Transfer",
-                    "state": [
-                        {
-                            "type": "ByteString",
-                            "value": "9iJ+r3D+PI1PSqgl4nsqXArTIZE="
-                        },
-                        {
-                            "type": "ByteString",
-                            "value": "5B702fGv1r+RMsWZ2SURLVdx6oI="
-                        },
-                        {
-                            "type": "Integer",
-                            "value": "10000"
-                        }
-                    ]
+              {
+                "contract": "0x668e0c1f9d7b70a99dd9e06eadd4c784d641afbc",
+                "eventname": "Transfer",
+                "state": {
+                  "type": "Array",
+                  "value": [
+                    {
+                      "type": "ByteString",
+                      "value": "CqOHtT6Wt5iaYxQxoFbdH0CgQvY="
+                    },
+                    {
+                      "type": "Any"
+                    },
+                    {
+                      "type": "Integer",
+                      "value": "18083410"
+                    }
+                  ]
                 }
-            ],
-            "txid": "0xfbafd7fc23aa87e23d099d497d2632566e8bf60d8eb0e1ffffe5da8122ad66e8",
-            "blockhash": "0xe45358abca67a130390461b03dbe24a5fa8772ee9e237b83b533a5a6d9a714d2"
-        }
+              },
+              {
+                "contract": "0x668e0c1f9d7b70a99dd9e06eadd4c784d641afbc",
+                "eventname": "Transfer",
+                "state": {
+                  "type": "Array",
+                  "value": [
+                    {
+                      "type": "Any"
+                    },
+                    {
+                      "type": "ByteString",
+                      "value": "z6LDQN4w1uEMToIZiPSxToNRPog="
+                    },
+                    {
+                      "type": "Integer",
+                      "value": "1252390"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "trigger": "PostPersist",
+            "vmstate": "HALT",
+            "gasconsumed": "2031260",
+            "exception": null,
+            "stack": [],
+            "notifications": [
+              {
+                "contract": "0x668e0c1f9d7b70a99dd9e06eadd4c784d641afbc",
+                "eventname": "Transfer",
+                "state": {
+                  "type": "Array",
+                  "value": [
+                    {
+                      "type": "Any"
+                    },
+                    {
+                      "type": "ByteString",
+                      "value": "z6LDQN4w1uEMToIZiPSxToNRPog="
+                    },
+                    {
+                      "type": "Integer",
+                      "value": "50000000"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
     }
   },
-  
+  {
+    "Name": "getapplicationlogasync_triggertype",
+    "Request": {
+      "jsonrpc": "2.0",
+      "method": "getapplicationlog",
+      "params": [ "0x6ea186fe714b8168ede3b78461db8945c06d867da649852352dbe7cbf1ba3724", "OnPersist" ],
+      "id": 1
+    },
+    "Response": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "blockhash": "0x6ea186fe714b8168ede3b78461db8945c06d867da649852352dbe7cbf1ba3724",
+        "executions": [
+          {
+            "trigger": "OnPersist",
+            "vmstate": "HALT",
+            "gasconsumed": "2031260",
+            "exception": null,
+            "stack": [],
+            "notifications": [
+              {
+                "contract": "0x668e0c1f9d7b70a99dd9e06eadd4c784d641afbc",
+                "eventname": "Transfer",
+                "state": {
+                  "type": "Array",
+                  "value": [
+                    {
+                      "type": "ByteString",
+                      "value": "CqOHtT6Wt5iaYxQxoFbdH0CgQvY="
+                    },
+                    {
+                      "type": "Any"
+                    },
+                    {
+                      "type": "Integer",
+                      "value": "18083410"
+                    }
+                  ]
+                }
+              },
+              {
+                "contract": "0x668e0c1f9d7b70a99dd9e06eadd4c784d641afbc",
+                "eventname": "Transfer",
+                "state": {
+                  "type": "Array",
+                  "value": [
+                    {
+                      "type": "Any"
+                    },
+                    {
+                      "type": "ByteString",
+                      "value": "z6LDQN4w1uEMToIZiPSxToNRPog="
+                    },
+                    {
+                      "type": "Integer",
+                      "value": "1252390"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
   {
     "Name": "getnep17transfersasync",
     "Request": {

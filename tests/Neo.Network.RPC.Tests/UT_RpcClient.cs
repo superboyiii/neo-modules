@@ -483,6 +483,14 @@ namespace Neo.Network.RPC.Tests
         }
 
         [TestMethod()]
+        public async Task GetApplicationLogTest_TriggerType()
+        {
+            var test = TestUtils.RpcTestCases.Find(p => p.Name == (nameof(rpc.GetApplicationLogAsync) + "_triggertype").ToLower());
+            var result = await rpc.GetApplicationLogAsync(test.Request.Params[0].AsString(), TriggerType.OnPersist);
+            Assert.AreEqual(test.Response.Result.ToString(), result.ToJson().ToString());
+        }
+
+        [TestMethod()]
         public async Task GetNep17TransfersTest()
         {
             var test = TestUtils.RpcTestCases.Find(p => p.Name == nameof(rpc.GetNep17TransfersAsync).ToLower());

@@ -10,7 +10,6 @@ namespace Neo.Plugins
     {
         #region Manifest
 
-        public UInt256 BlockHash { get; set; } = new();
         public UInt256 TransactionHash { get; set; } = new();
         public UInt160 ScriptHash { get; set; } = new();
         public string EventName { get; set; } = string.Empty;
@@ -20,10 +19,9 @@ namespace Neo.Plugins
 
         #region Static Methods
 
-        public static NotifyLogManifest Create(NotifyEventArgs notifyArgs, UInt256 blockHash) =>
+        public static NotifyLogManifest Create(NotifyEventArgs notifyArgs) =>
             new()
             {
-                BlockHash = blockHash,
                 TransactionHash = ((Transaction)notifyArgs.ScriptContainer).Hash,
                 ScriptHash = notifyArgs.ScriptHash,
                 EventName = notifyArgs.EventName,
@@ -35,7 +33,6 @@ namespace Neo.Plugins
         #region ISerializable
 
         public int Size =>
-            BlockHash.Size +
             TransactionHash.Size +
             ScriptHash.Size +
             EventName.GetVarSize() +
@@ -45,7 +42,6 @@ namespace Neo.Plugins
 
         public void Deserialize(ref MemoryReader reader)
         {
-            BlockHash.Deserialize(ref reader);
             TransactionHash.Deserialize(ref reader);
             ScriptHash.Deserialize(ref reader);
             EventName = reader.ReadVarString();
@@ -61,7 +57,6 @@ namespace Neo.Plugins
 
         public void Serialize(BinaryWriter writer)
         {
-            writer.Write(BlockHash);
             writer.Write(TransactionHash);
             writer.Write(ScriptHash);
             writer.WriteVarString(EventName);

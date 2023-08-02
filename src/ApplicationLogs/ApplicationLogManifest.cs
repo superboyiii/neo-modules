@@ -10,7 +10,6 @@ namespace Neo.Plugins
     {
         #region Manifest
 
-        public TriggerType Trigger { get; set; } = TriggerType.All;
         public VMState VmState { get; set; } = VMState.NONE;
         public string Exception { get; set; } = string.Empty;
         public long GasConsumed { get; set; } = 0L;
@@ -23,7 +22,6 @@ namespace Neo.Plugins
         public static ApplicationLogManifest Create(Blockchain.ApplicationExecuted appExec) =>
             new()
             {
-                Trigger = appExec.Trigger,
                 VmState = appExec.VMState,
                 Exception = appExec.Exception?.Message,
                 GasConsumed = appExec.GasConsumed,
@@ -35,7 +33,6 @@ namespace Neo.Plugins
         #region ISerializable
 
         public int Size =>
-            sizeof(byte) +                              // Trigger
             sizeof(byte) +                              // VmState
             Exception.GetVarSize() +
             sizeof(long) +                              // GasConsumed
@@ -45,7 +42,6 @@ namespace Neo.Plugins
 
         public void Deserialize(ref MemoryReader reader)
         {
-            Trigger = (TriggerType)reader.ReadByte();
             VmState = (VMState)reader.ReadByte();
             Exception = reader.ReadVarString();
             GasConsumed = reader.ReadInt64();
@@ -62,7 +58,6 @@ namespace Neo.Plugins
 
         public void Serialize(BinaryWriter writer)
         {
-            writer.Write((byte)Trigger);
             writer.Write((byte)VmState);
             writer.WriteVarString(Exception ?? string.Empty);
             writer.Write(GasConsumed);

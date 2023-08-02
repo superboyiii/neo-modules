@@ -87,10 +87,9 @@ namespace Neo.Plugins
 
             var output = new JObject();
             output["txid"] = hash.ToString();
-            output["exception"] =  string.IsNullOrEmpty(appLog.ApplicationManifest.Exception) ? null : appLog.ApplicationManifest.Exception;
-            output["trigger"] = appLog.ApplicationManifest.Trigger;
-            output["vmstate"] = appLog.ApplicationManifest.VmState;
+            output["exception"] = appLog.ApplicationManifest.Exception == string.Empty ? null : appLog.ApplicationManifest.Exception;
             output["gasconsumed"] = appLog.ApplicationManifest.GasConsumed;
+            output["vmstate"] = appLog.ApplicationManifest.VmState;
 
             try
             {
@@ -106,8 +105,6 @@ namespace Neo.Plugins
                 var notification = new JObject();
                 notification["contract"] = s.ScriptHash.ToString();
                 notification["eventname"] = s.EventName;
-
-                output["blockhash"] = s.BlockHash.ToString();
 
                 try
                 {
@@ -206,7 +203,7 @@ namespace Neo.Plugins
             var notifications = applicationExecuted.Notifications;
             for (int i = (notifications.Length - 1); i != -1; i--)
             {
-                var notifyManifest = NotifyLogManifest.Create(notifications[i], block.Hash);
+                var notifyManifest = NotifyLogManifest.Create(notifications[i]);
                 var notifyLogKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Notify)
                     .Add(notifications[i].ScriptHash)
                     .AddBigEndian(block.Timestamp)
