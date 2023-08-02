@@ -78,6 +78,52 @@ namespace Neo.Plugins
         #endregion
 
         [RpcMethod]
+        public JToken GetContractEventLog(JArray _params)
+        {
+            if (_params.Count != 3)
+                throw new RpcException(-100, "invalid params");
+
+            UInt160 scriptHash = UInt160.Parse(_params[0].AsString());
+            uint requestPageIndex = uint.Parse(_params[1].AsString());
+            uint requestPageSize = uint.Parse(_params[2].AsString());
+
+            var root = new JArray();
+
+            var contractEvents = GetContractNotifyLog(scriptHash, requestPageIndex, requestPageSize);
+
+            if (contractEvents.Any() == false)
+                throw new RpcException(-100, "Unknown contracthash");
+
+            foreach (var itemEvent in contractEvents)
+            {
+                var contractEvent = new JObject();
+                contractEvent["txid"] = itemEvent.TransactionHash.ToString();
+
+                var ce = new JObject();
+                ce["contract"] = itemEvent.ScriptHash.ToString();
+                ce["eventname"] = itemEvent.EventName;
+
+                try
+                {
+                    var state = new JObject();
+                    state["type"] = "Array";
+                    state["value"] = itemEvent.State.Select(ss => ss.ToJson()).ToArray();
+
+                    ce["state"] = state;
+                }
+                catch (InvalidOperationException)
+                {
+                    ce["state"] = "error: recursive reference";
+                }
+
+                contractEvent["event"] = ce;
+                root.Add(contractEvent);
+            }
+
+            return root;
+        }
+
+        [RpcMethod]
         public JToken GetApplicationLog(JArray _params)
         {
             UInt256 hash = UInt256.Parse(_params[0].AsString());
@@ -163,7 +209,7 @@ namespace Neo.Plugins
             return (appManifest, nManifests.ToArray());
         }
 
-        public IEnumerable<NotifyLogManifest> Find(UInt160 scriptHash, uint page = 1, uint pageSize = 50)
+        public IEnumerable<NotifyLogManifest> GetContractNotifyLog(UInt160 scriptHash, uint page = 1, uint pageSize = 50)
         {
             var prefixKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Notify)
                 .Add(scriptHash).ToArray();
