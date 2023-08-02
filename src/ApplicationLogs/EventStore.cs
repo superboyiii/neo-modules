@@ -84,23 +84,26 @@ namespace Neo.Plugins
             var appLog = GetTransactionLog(hash);
             if (appLog.ApplicationManifest == null && appLog.Notifications.Length == 0)
                 throw new RpcException(-100, "Unknown transaction/blockhash");
+            
+            var raw = new JObject();
+            raw["txid"] = hash.ToString();
 
-            var output = new JObject();
-            output["txid"] = hash.ToString();
-            output["exception"] = appLog.ApplicationManifest.Exception == string.Empty ? null : appLog.ApplicationManifest.Exception;
-            output["gasconsumed"] = appLog.ApplicationManifest.GasConsumed;
-            output["vmstate"] = appLog.ApplicationManifest.VmState;
+            var trigger = new JObject();
+            trigger["trigger"] = appLog.ApplicationManifest.Trigger;
+            trigger["vmstate"] = appLog.ApplicationManifest.VmState;
+            trigger["exception"] = string.IsNullOrEmpty(appLog.ApplicationManifest.Exception) ? null : appLog.ApplicationManifest.Exception;
+            trigger["gasconsumed"] = appLog.ApplicationManifest.GasConsumed.ToString();
 
             try
             {
-                output["stack"] = appLog.ApplicationManifest.Stack.Select(s => s.ToJson(Settings.Default.MaxStackSize)).ToArray();
+                trigger["stack"] = appLog.ApplicationManifest.Stack.Select(s => s.ToJson(Settings.Default.MaxStackSize)).ToArray();
             }
             catch (Exception ex)
             {
-                output["exception"] = ex.Message;
+                trigger["exception"] = ex.Message;
             }
 
-            output["notifications"] = appLog.Notifications.Select(s =>
+            trigger["notifications"] = appLog.Notifications.Select(s =>
             {
                 var notification = new JObject();
                 notification["contract"] = s.ScriptHash.ToString();
@@ -108,7 +111,11 @@ namespace Neo.Plugins
 
                 try
                 {
-                    notification["state"] = s.State.Select(ss => ss.ToJson()).ToArray();
+                    var state = new JObject();
+                    state["type"] = "Array";
+                    state["value"] = s.State.Select(ss => ss.ToJson()).ToArray();
+
+                    notification["state"] = state;
                 }
                 catch (InvalidOperationException)
                 {
@@ -118,7 +125,21 @@ namespace Neo.Plugins
                 return notification;
             }).ToArray();
 
-            return output;
+            raw["executions"] = new[] { trigger };
+
+            if (_params.Count >= 2 && Enum.TryParse(_params[1].AsString(), true, out TriggerType triggerType))
+            {
+                var executions = raw["executions"] as JArray;
+                for (int i = 0; i < executions.Count;)
+                {
+                    if (executions[i]["trigger"].AsString().Equals(triggerType.ToString(), StringComparison.InvariantCultureIgnoreCase) == false)
+                        executions.RemoveAt(i);
+                    else
+                        i++;
+                }
+            }
+
+            return raw;
         }
 
         public (ApplicationLogManifest ApplicationManifest, NotifyLogManifest[] Notifications) GetTransactionLog(UInt256 txHash)
