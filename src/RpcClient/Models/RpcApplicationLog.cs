@@ -9,6 +9,7 @@
 // modifications are permitted.
 
 using Neo.Json;
+using Neo.Network.P2P.Payloads;
 using Neo.SmartContract;
 using Neo.VM;
 using Neo.VM.Types;
@@ -23,16 +24,15 @@ namespace Neo.Network.RPC.Models
 
         public UInt256 BlockHash { get; set; }
 
-        public List<Execution> Executions { get; set; }
+        public Execution Execution { get; set; }
 
         public JObject ToJson()
         {
-            JObject json = new JObject();
+            JObject json = Execution.ToJson();
             if (TxId != null)
                 json["txid"] = TxId.ToString();
             if (BlockHash != null)
                 json["blockhash"] = BlockHash.ToString();
-            json["executions"] = Executions.Select(p => p.ToJson()).ToArray();
             return json;
         }
 
@@ -42,7 +42,7 @@ namespace Neo.Network.RPC.Models
             {
                 TxId = json["txid"] is null ? null : UInt256.Parse(json["txid"].AsString()),
                 BlockHash = json["blockhash"] is null ? null : UInt256.Parse(json["blockhash"].AsString()),
-                Executions = ((JArray)json["executions"]).Select(p => Execution.FromJson((JObject)p, protocolSettings)).ToList(),
+                Execution = Execution.FromJson(json, protocolSettings),
             };
         }
     }
@@ -64,10 +64,10 @@ namespace Neo.Network.RPC.Models
         public JObject ToJson()
         {
             JObject json = new();
+            json["exception"] = ExceptionMessage;
             json["trigger"] = Trigger;
             json["vmstate"] = VMState;
-            json["gasconsumed"] = GasConsumed.ToString();
-            json["exception"] = ExceptionMessage;
+            json["gasconsumed"] = GasConsumed;
             json["stack"] = Stack.Select(q => q.ToJson()).ToArray();
             json["notifications"] = Notifications.Select(q => q.ToJson()).ToArray();
             return json;
@@ -93,25 +93,29 @@ namespace Neo.Network.RPC.Models
 
         public string EventName { get; set; }
 
-        public StackItem State { get; set; }
+        public StackItem[] State { get; set; }
 
         public JObject ToJson()
         {
             JObject json = new();
             json["contract"] = Contract.ToString();
             json["eventname"] = EventName;
-            json["state"] = State.ToJson();
+            json["state"] = State.Select(s => s.ToJson()).ToArray();
             return json;
         }
 
         public static RpcNotifyEventArgs FromJson(JObject json, ProtocolSettings protocolSettings)
         {
-            return new RpcNotifyEventArgs
+            var obj =  new RpcNotifyEventArgs
             {
                 Contract = json["contract"].ToScriptHash(protocolSettings),
                 EventName = json["eventname"].AsString(),
-                State = Utility.StackItemFromJson((JObject)json["state"])
             };
+            var lst = new List<StackItem>();
+            foreach (JObject jobj in (JArray)json["state"])
+                lst.Add(Utility.StackItemFromJson(jobj));
+            obj.State = lst.ToArray();
+            return obj;
         }
     }
 }
