@@ -142,7 +142,7 @@ namespace Neo.Plugins
             return (appManifest, nManifests.ToArray());
         }
 
-        public IEnumerable<(UInt256 TransactionHash, NotifyLogManifest Notification)> Find(UInt160 scriptHash, uint page = 1, uint pageSize = 50)
+        public IEnumerable<NotifyLogManifest> Find(UInt160 scriptHash, uint page = 1, uint pageSize = 50)
         {
             var prefixKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Notify)
                 .Add(scriptHash).ToArray();
@@ -154,9 +154,8 @@ namespace Neo.Plugins
             {
                 if (key.AsSpan().StartsWith(prefixKey))
                 {
-                    var txHash = new UInt256(key.AsSpan(key.Length - UInt256.Length).ToArray());
                     if (index >= page && index < (pageSize + page))
-                        yield return (txHash, value.AsSerializable<NotifyLogManifest>());
+                        yield return value.AsSerializable<NotifyLogManifest>();
                     index++;
                 }
                 else
