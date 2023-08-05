@@ -28,6 +28,7 @@ namespace Neo.Plugins
         internal static readonly byte Prefix_ApplicationLog = 10;
         internal static readonly byte Prefix_ApplicationLog_Notify = 11;
         internal static readonly byte Prefix_ApplicationLog_Transaction = 12;
+        internal static readonly byte Prefix_ApplicationLog_Block = 13;
 
         #endregion
 
@@ -78,61 +79,121 @@ namespace Neo.Plugins
         #endregion
 
         [RpcMethod]
-        public JToken GetContractEventLog(JArray _params)
-        {
-            if (_params.Count != 3)
-                throw new RpcException(-100, "invalid params");
-
-            UInt160 scriptHash = UInt160.Parse(_params[0].AsString());
-            uint requestPageIndex = uint.Parse(_params[1].AsString());
-            uint requestPageSize = uint.Parse(_params[2].AsString());
-
-            var root = new JArray();
-
-            var contractEvents = GetContractNotifyLog(scriptHash, requestPageIndex, requestPageSize);
-
-            if (contractEvents.Any() == false)
-                throw new RpcException(-100, "Unknown contracthash");
-
-            foreach (var itemEvent in contractEvents)
-            {
-                var contractEvent = new JObject();
-                contractEvent["txid"] = itemEvent.TransactionHash.ToString();
-
-                var ce = new JObject();
-                ce["contract"] = itemEvent.ScriptHash.ToString();
-                ce["eventname"] = itemEvent.EventName;
-
-                try
-                {
-                    var state = new JObject();
-                    state["type"] = "Array";
-                    state["value"] = itemEvent.State.Select(ss => ss.ToJson()).ToArray();
-
-                    ce["state"] = state;
-                }
-                catch (InvalidOperationException)
-                {
-                    ce["state"] = "error: recursive reference";
-                }
-
-                contractEvent["event"] = ce;
-                root.Add(contractEvent);
-            }
-
-            return root;
-        }
-
-        [RpcMethod]
         public JToken GetApplicationLog(JArray _params)
         {
             UInt256 hash = UInt256.Parse(_params[0].AsString());
-            var appLog = GetTransactionLog(hash);
-            if (appLog.ApplicationManifest == null && appLog.Notifications.Length == 0)
+            var raw = TransactionToJObject(hash);
+            if (raw == null)
+                raw = BlockToJObject(hash);
+            if (raw == null)
                 throw new RpcException(-100, "Unknown transaction/blockhash");
-            
+
+            if (_params.Count >= 2 && Enum.TryParse(_params[1].AsString(), true, out TriggerType triggerType))
+            {
+                var executions = raw["executions"] as JArray;
+                for (int i = 0; i < executions.Count;)
+                {
+                    if (executions[i]["trigger"].AsString().Equals(triggerType.ToString(), StringComparison.InvariantCultureIgnoreCase) == false)
+                        executions.RemoveAt(i);
+                    else
+                        i++;
+                }
+            }
+
+            return raw;
+        }
+
+        public IEnumerable<(ApplicationLogManifest ApplicationManifest, NotifyLogManifest[] Notifications)> GetBlockLog(UInt256 blockHash)
+        {
+            var appLogKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog).Add(blockHash).ToArray();
+
+            foreach (var (key, value) in _db.Seek(appLogKey, SeekDirection.Forward))
+            {
+                if (key.AsSpan().StartsWith(appLogKey))
+                {
+                    var tigger = key.AsSpan(sizeof(int) + sizeof(byte) + UInt256.Length)[0];
+                    var appManifest = value?.AsSerializable<ApplicationLogManifest>();
+
+                    var blockKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Block)
+                        .Add(blockHash).Add(tigger).ToArray();
+                    
+                    var nManifests = new List<NotifyLogManifest>();
+                    foreach (var (notifyKey, notifyValue) in _db.Seek(blockKey, SeekDirection.Forward))
+                    {
+                        if (notifyKey.AsSpan().StartsWith(blockKey))
+                        {
+                            var txNotifyLogData = _db.TryGet(notifyValue);
+                            nManifests.Add(txNotifyLogData.AsSerializable<NotifyLogManifest>());
+                        }
+                    }
+
+                    yield return (appManifest, nManifests.ToArray());
+                }
+                else
+                    yield break;
+            }
+        }
+
+        public (ApplicationLogManifest ApplicationManifest, NotifyLogManifest[] Notifications) GetTransactionLog(UInt256 txHash)
+        {
+            var appLogKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog).Add(txHash).ToArray();
+
+            var appLogData = _db.TryGet(appLogKey);
+            var appManifest = appLogData?.AsSerializable<ApplicationLogManifest>();
+
+            var txKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Transaction).Add(txHash).ToArray();
+            var nManifests = new List<NotifyLogManifest>();
+            foreach (var (key, value) in _db.Seek(txKey, SeekDirection.Forward))
+            {
+                if (key.AsSpan().StartsWith(txKey))
+                {
+                    var txNotifyLogData = _db.TryGet(value);
+                    nManifests.Add(txNotifyLogData.AsSerializable<NotifyLogManifest>());
+                }
+            }
+
+            return (appManifest, nManifests.ToArray());
+        }
+
+        #region Blockchain Events
+
+        private void OnCommitting(NeoSystem system, Block block, DataCache snapshot, IReadOnlyList<Blockchain.ApplicationExecuted> applicationExecutedList)
+        {
+            if (system.Settings.Network != Settings.Default.Network) return;
+
+            if (_db is null) return;
+            ResetBatch();
+
+            foreach (var item in applicationExecutedList.Where(w => w.Transaction != null))
+                PutTransaction(block, item);
+            foreach (var item in applicationExecutedList.Where(w => w.Transaction == null))
+                PutBlock(block, item);
+        }
+
+        private void OnCommitted(NeoSystem system, Block block)
+        {
+            if (system.Settings.Network != Settings.Default.Network) return;
+            _snapshot?.Commit();
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        private void ResetBatch()
+        {
+            _snapshot?.Dispose();
+            _snapshot = _db.GetSnapshot();
+        }
+
+        private JObject TransactionToJObject(UInt256 txHash)
+        {
+            var appLog = GetTransactionLog(txHash);
+            if (appLog.ApplicationManifest == null && appLog.Notifications.Length == 0)
+                return null;
+
             var raw = new JObject();
-            raw["txid"] = hash.ToString();
+            raw["txid"] = txHash.ToString();
 
             var trigger = new JObject();
             trigger["trigger"] = appLog.ApplicationManifest.Trigger;
@@ -172,94 +233,90 @@ namespace Neo.Plugins
             }).ToArray();
 
             raw["executions"] = new[] { trigger };
-
-            if (_params.Count >= 2 && Enum.TryParse(_params[1].AsString(), true, out TriggerType triggerType))
-            {
-                var executions = raw["executions"] as JArray;
-                for (int i = 0; i < executions.Count;)
-                {
-                    if (executions[i]["trigger"].AsString().Equals(triggerType.ToString(), StringComparison.InvariantCultureIgnoreCase) == false)
-                        executions.RemoveAt(i);
-                    else
-                        i++;
-                }
-            }
-
             return raw;
         }
 
-        public (ApplicationLogManifest ApplicationManifest, NotifyLogManifest[] Notifications) GetTransactionLog(UInt256 txHash)
+        private JObject BlockToJObject(UInt256 blockHash)
         {
-            var appLogKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog).Add(txHash).ToArray();
-
-            var appLogData = _db.TryGet(appLogKey);
-            var appManifest = appLogData?.AsSerializable<ApplicationLogManifest>();
-
-            var txKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Transaction).Add(txHash).ToArray();
-            var nManifests = new List<NotifyLogManifest>();
-            foreach (var (key, value) in _db.Seek(txKey, SeekDirection.Forward))
+            var blocks = GetBlockLog(blockHash);
+            if (blocks.Any())
             {
-                if (key.AsSpan().StartsWith(txKey))
+                var blockJson = new JObject();
+                blockJson["blockhash"] = blockHash.ToString();
+                var triggerList = new List<JObject>();
+                foreach (var appExec in blocks)
                 {
-                    var txNotifyLogData = _db.TryGet(value);
-                    nManifests.Add(txNotifyLogData.AsSerializable<NotifyLogManifest>());
+                    JObject trigger = new();
+                    trigger["trigger"] = appExec.ApplicationManifest.Trigger;
+                    trigger["vmstate"] = appExec.ApplicationManifest.VmState;
+                    trigger["gasconsumed"] = appExec.ApplicationManifest.GasConsumed.ToString();
+                    try
+                    {
+                        trigger["stack"] = appExec.ApplicationManifest.Stack.Select(q => q.ToJson(Settings.Default.MaxStackSize)).ToArray();
+                    }
+                    catch (Exception ex)
+                    {
+                        trigger["exception"] = ex.Message;
+                    }
+                    trigger["notifications"] = appExec.Notifications.Select(s =>
+                    {
+                        JObject notification = new();
+                        notification["contract"] = s.ScriptHash.ToString();
+                        notification["eventname"] = s.EventName;
+                        try
+                        {
+                            var state = new JObject();
+                            state["type"] = "Array";
+                            state["value"] = s.State.Select(ss => ss.ToJson()).ToArray();
+
+                            notification["state"] = state;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            notification["state"] = "error: recursive reference";
+                        }
+                        return notification;
+                    }).ToArray();
+                    triggerList.Add(trigger);
                 }
+                blockJson["executions"] = triggerList.ToArray();
+                return blockJson;
             }
 
-            return (appManifest, nManifests.ToArray());
+            return null;
         }
 
-        public IEnumerable<NotifyLogManifest> GetContractNotifyLog(UInt160 scriptHash, uint page = 1, uint pageSize = 50)
+        private void PutBlock(Block block, Blockchain.ApplicationExecuted applicationExecuted)
         {
-            var prefixKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Notify)
-                .Add(scriptHash).ToArray();
-            var searchPrefix = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Notify)
-                .Add(scriptHash).AddBigEndian(ulong.MaxValue).ToArray();
+            var appManifest = ApplicationLogManifest.Create(applicationExecuted);
+            var appLogKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog)
+                .Add(block.Hash).Add((byte)applicationExecuted.Trigger).ToArray();
+            _snapshot.Put(appLogKey, appManifest.ToArray());
 
-            uint index = 1;
-            foreach (var (key, value) in _db.Seek(searchPrefix, SeekDirection.Backward))
+            if (applicationExecuted.Notifications.Length == 0) return;
+
+            var notifications = applicationExecuted.Notifications;
+            for (int i = 0; i < notifications.Length; i++)
             {
-                if (key.AsSpan().StartsWith(prefixKey))
-                {
-                    if (index >= page && index < (pageSize + page))
-                        yield return value.AsSerializable<NotifyLogManifest>();
-                    index++;
-                }
-                else
-                    yield break;
+                var notifyManifest = NotifyLogManifest.Create(notifications[i], block.Hash, new());
+                var notifyLogKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Notify)
+                    .Add(notifications[i].ScriptHash)
+                    .AddBigEndian(block.Timestamp)
+                    .Add((byte)applicationExecuted.Trigger)
+                    .AddBigEndian(unchecked((uint)i))
+                    .ToArray();
+                _snapshot.Put(notifyLogKey, notifyManifest.ToArray());
+
+                var blockkey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Block)
+                    .Add(block.Hash)
+                    .Add((byte)applicationExecuted.Trigger)
+                    .AddBigEndian(unchecked((uint)i))
+                    .ToArray();
+                _snapshot.Put(blockkey, notifyLogKey);
             }
         }
 
-        #region Blockchain Events
-
-        private void OnCommitting(NeoSystem system, Block block, DataCache snapshot, IReadOnlyList<Blockchain.ApplicationExecuted> applicationExecutedList)
-        {
-            if (system.Settings.Network != Settings.Default.Network) return;
-
-            if (_db is null) return;
-            ResetBatch();
-
-            foreach (var item in applicationExecutedList.Where(w => w.Transaction != null))
-                Put(block, item);
-        }
-
-        private void OnCommitted(NeoSystem system, Block block)
-        {
-            if (system.Settings.Network != Settings.Default.Network) return;
-            _snapshot?.Commit();
-        }
-
-        #endregion
-
-        #region Private Methods
-
-        private void ResetBatch()
-        {
-            _snapshot?.Dispose();
-            _snapshot = _db.GetSnapshot();
-        }
-
-        private void Put(Block block, Blockchain.ApplicationExecuted applicationExecuted)
+        private void PutTransaction(Block block, Blockchain.ApplicationExecuted applicationExecuted)
         {
             var appManifest = ApplicationLogManifest.Create(applicationExecuted);
             var appLogKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog).Add(applicationExecuted.Transaction.Hash).ToArray();
@@ -268,12 +325,13 @@ namespace Neo.Plugins
             if (applicationExecuted.Notifications.Length == 0) return;
 
             var notifications = applicationExecuted.Notifications;
-            for (int i = (notifications.Length - 1); i != -1; i--)
+            for (int i = 0; i < notifications.Length; i++)
             {
-                var notifyManifest = NotifyLogManifest.Create(notifications[i]);
+                var notifyManifest = NotifyLogManifest.Create(notifications[i], block.Hash);
                 var notifyLogKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Notify)
                     .Add(notifications[i].ScriptHash)
                     .AddBigEndian(block.Timestamp)
+                    .Add((byte)applicationExecuted.Trigger)
                     .AddBigEndian(unchecked((uint)i))
                     .ToArray();
                 _snapshot.Put(notifyLogKey, notifyManifest.ToArray());
