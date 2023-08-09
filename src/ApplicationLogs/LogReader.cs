@@ -19,7 +19,7 @@ using static System.IO.Path;
 
 namespace Neo.Plugins
 {
-    public class EventStore : Plugin
+    public class LogReader : Plugin
     {
         #region Prefixes
 
@@ -44,7 +44,7 @@ namespace Neo.Plugins
 
         #region Ctor
 
-        public EventStore()
+        public LogReader()
         {
             Blockchain.Committing += OnCommitting;
             Blockchain.Committed += OnCommitted;

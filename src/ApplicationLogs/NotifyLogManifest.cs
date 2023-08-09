@@ -65,7 +65,7 @@ namespace Neo.Plugins
             for (int i = 0; i < State.Length; i++)
             {
                 int dataSize = reader.ReadInt32();
-                State[i] = BinarySerializer.Deserialize(reader.ReadMemory(dataSize), ExecutionEngineLimits.Default with { MaxItemSize = 1024 * 1024 });
+                State[i] = BinarySerializer.Deserialize(reader.ReadMemory(dataSize), ExecutionEngineLimits.Default with { MaxItemSize = uint.MaxValue / 2 });
             }
         }
 
@@ -78,9 +78,7 @@ namespace Neo.Plugins
             writer.Write(checked((ushort)State.Length));
             for (int i = 0; i < State.Length; i++)
             {
-                var data = State[i] is InteropInterface ?
-                    BinarySerializer.Serialize(StackItem.Null, 1024 * 1024) :
-                    BinarySerializer.Serialize(State[i], 1024 * 1024);
+                var data = BinarySerializer.Serialize(State[i], uint.MaxValue / 2);
                 writer.Write(data.Length);
                 writer.Write(data);
             }
@@ -90,9 +88,7 @@ namespace Neo.Plugins
         {
             int size = 0;
             foreach (StackItem item in State)
-                size += item is InteropInterface ?
-                    BinarySerializer.Serialize(StackItem.Null, 1024 * 1024).Length :
-                    BinarySerializer.Serialize(item, 1024 * 1024).Length;
+                size += BinarySerializer.Serialize(item, uint.MaxValue / 2).Length;
             return size;
         }
 
