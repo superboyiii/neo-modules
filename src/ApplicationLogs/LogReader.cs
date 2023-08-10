@@ -82,9 +82,9 @@ namespace Neo.Plugins
         public JToken GetApplicationLog(JArray _params)
         {
             UInt256 hash = UInt256.Parse(_params[0].AsString());
-            var raw = TransactionToJObject(hash);
+            var raw = BlockToJObject(hash);
             if (raw == null)
-                raw = BlockToJObject(hash);
+                raw = TransactionToJObject(hash);
             if (raw == null)
                 throw new RpcException(-100, "Unknown transaction/blockhash");
 
@@ -100,7 +100,7 @@ namespace Neo.Plugins
                 }
             }
 
-            return raw;
+            return raw ?? JToken.Null;
         }
 
         public IEnumerable<(ApplicationLogManifest ApplicationManifest, NotifyLogManifest[] Notifications)> GetBlockLog(UInt256 blockHash)
@@ -123,6 +123,7 @@ namespace Neo.Plugins
                         if (notifyKey.AsSpan().StartsWith(blockKey))
                         {
                             var txNotifyLogData = _db.TryGet(notifyValue);
+                            if (txNotifyLogData is null) continue;
                             nManifests.Add(txNotifyLogData.AsSerializable<NotifyLogManifest>());
                         }
                     }
@@ -148,6 +149,7 @@ namespace Neo.Plugins
                 if (key.AsSpan().StartsWith(txKey))
                 {
                     var txNotifyLogData = _db.TryGet(value);
+                    if (txNotifyLogData is null) continue;
                     nManifests.Add(txNotifyLogData.AsSerializable<NotifyLogManifest>());
                 }
             }
