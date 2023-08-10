@@ -70,7 +70,15 @@ namespace Neo.Plugins
             writer.Write(checked((ushort)Stack.Length));
             for (int i = 0; i < Stack.Length; i++)
             {
-                var data = BinarySerializer.Serialize(Stack[i], uint.MaxValue / 2);
+                byte[] data = System.Array.Empty<byte>();
+                try
+                {
+                    data = BinarySerializer.Serialize(Stack[i], uint.MaxValue / 2);
+                }
+                catch
+                {
+                    data = BinarySerializer.Serialize(StackItem.Null, uint.MaxValue / 2);
+                }
                 writer.Write(data.Length);
                 writer.Write(data);
             }
@@ -80,7 +88,16 @@ namespace Neo.Plugins
         {
             int size = 0;
             foreach (StackItem item in Stack)
-                size += BinarySerializer.Serialize(item, uint.MaxValue / 2).Length;
+            {
+                try
+                {
+                    size += BinarySerializer.Serialize(item, uint.MaxValue / 2).Length;
+                }
+                catch
+                {
+                    size += BinarySerializer.Serialize(StackItem.Null, uint.MaxValue / 2).Length;
+                }
+            }
             return size;
         }
 

@@ -116,7 +116,7 @@ namespace Neo.Plugins
 
                     var blockKey = new KeyBuilder(Prefix_Id, Prefix_ApplicationLog_Block)
                         .Add(blockHash).Add(tigger).ToArray();
-                    
+
                     var nManifests = new List<NotifyLogManifest>();
                     foreach (var (notifyKey, notifyValue) in _db.Seek(blockKey, SeekDirection.Forward))
                     {
