@@ -49,7 +49,6 @@ namespace ApplicationLogs.Store
 
         public void Dispose()
         {
-            _snapshot.Dispose();
             GC.SuppressFinalize(this);
         }
 
