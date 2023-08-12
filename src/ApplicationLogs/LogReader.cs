@@ -83,7 +83,7 @@ namespace Neo.Plugins
                 var executions = raw["executions"] as JArray;
                 for (int i = 0; i < executions.Count;)
                 {
-                    if (executions[i]["trigger"].AsString().Equals(triggerType.ToString(), StringComparison.InvariantCultureIgnoreCase) == false)
+                    if (executions[i]["trigger"].AsString().Equals(triggerType.ToString(), StringComparison.OrdinalIgnoreCase) == false)
                         executions.RemoveAt(i);
                     else
                         i++;
