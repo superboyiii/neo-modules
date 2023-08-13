@@ -4,7 +4,7 @@ using Neo.SmartContract;
 
 namespace ApplicationLogs.Store.States
 {
-    public class ContractLogState : NotifyState, IEquatable<ContractLogState>
+    public class ContractLogState : NotifyLogState, IEquatable<ContractLogState>
     {
         public UInt256 TransactionHash { get; set; } = new();
         public TriggerType Trigger { get; set; } = TriggerType.All;

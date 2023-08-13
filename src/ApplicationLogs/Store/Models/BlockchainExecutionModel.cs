@@ -8,7 +8,6 @@ namespace ApplicationLogs.Store.Models
 {
     public class BlockchainExecutionModel
     {
-        public UInt256 TxHash { get; set; } = new();
         public TriggerType Trigger { get; set; } = TriggerType.All;
         public VMState VmState { get; set; } = VMState.NONE;
         public string Exception { get; set; } = string.Empty;

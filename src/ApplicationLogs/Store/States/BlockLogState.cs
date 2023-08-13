@@ -3,35 +3,35 @@ using Neo.IO;
 
 namespace ApplicationLogs.Store.States
 {
-    public class BlockLogState : NotifyLogState, IEquatable<BlockLogState>
+    public class BlockLogState : ISerializable, IEquatable<BlockLogState>
     {
-        public UInt256 TransactionHash { get; set; } = new();
+        public Guid[] NotifyLogIds { get; set; } = Array.Empty<Guid>();
 
-        public static BlockLogState Create(UInt256 txHash, UInt160 scriptHash, string eventName, Guid[] stackItemIds) =>
+        public static BlockLogState Create(Guid[] notifyLogIds) =>
             new()
             {
-                TransactionHash = txHash ?? new(),
-                ScriptHash = scriptHash,
-                EventName = eventName,
-                StackItemIds = stackItemIds,
+                NotifyLogIds = notifyLogIds,
             };
 
         #region ISerializable
 
-        public override int Size =>
-            TransactionHash.Size +
-            base.Size;
+        public virtual int Size =>
+            sizeof(uint) +
+            NotifyLogIds.Sum(s => s.ToByteArray().GetVarSize());
 
-        public override void Deserialize(ref MemoryReader reader)
+        public virtual void Deserialize(ref MemoryReader reader)
         {
-            TransactionHash.Deserialize(ref reader);
-            base.Deserialize(ref reader);
+            uint aLen = reader.ReadUInt32();
+            NotifyLogIds = new Guid[aLen];
+            for (int i = 0; i < aLen; i++)
+                NotifyLogIds[i] = new Guid(reader.ReadVarMemory().Span);
         }
 
-        public override void Serialize(BinaryWriter writer)
+        public virtual void Serialize(BinaryWriter writer)
         {
-            TransactionHash.Serialize(writer);
-            base.Serialize(writer);
+            writer.Write((uint)NotifyLogIds.Length);
+            for (int i = 0; i < NotifyLogIds.Length; i++)
+                writer.WriteVarBytes(NotifyLogIds[i].ToByteArray());
         }
 
         #endregion
@@ -39,14 +39,13 @@ namespace ApplicationLogs.Store.States
         #region IEquatable
 
         public bool Equals(BlockLogState other) =>
-            ScriptHash == other.ScriptHash && EventName == other.EventName &&
-            StackItemIds.SequenceEqual(other.StackItemIds) && TransactionHash == other.TransactionHash;
+            NotifyLogIds.SequenceEqual(other.NotifyLogIds);
 
         public override bool Equals(object obj) =>
             Equals(obj as BlockLogState);
 
         public override int GetHashCode() =>
-            TransactionHash.GetHashCode() + base.GetHashCode();
+            NotifyLogIds.Sum(s => s.GetHashCode());
 
         #endregion
     }

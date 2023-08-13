@@ -125,7 +125,7 @@ namespace Neo.Plugins
         [ConsoleCommand("vm tx", Category = "ApplicationLog Commands")]
         private void OnGetTransactionCommand(UInt256 txhash)
         {
-            var txApplication = _neostore.GetTransactionLog(txhash, TriggerType.Application);
+            var txApplication = _neostore.GetTransactionLog(txhash);
 
             if (txApplication == null)
                 ConsoleHelper.Error($"Transaction {txhash} was not found.");
@@ -203,12 +203,12 @@ namespace Neo.Plugins
 
         private JObject TransactionToJObject(UInt256 txHash)
         {
-            var appLog = _neostore.GetTransactionLog(txHash, TriggerType.Application);
+            var appLog = _neostore.GetTransactionLog(txHash);
             if (appLog == null)
                 return null;
 
             var raw = new JObject();
-            raw["txid"] = appLog.TxHash.ToString();
+            raw["txid"] = txHash.ToString();
 
             var trigger = new JObject();
             trigger["trigger"] = appLog.Trigger;
