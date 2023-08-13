@@ -1,5 +1,4 @@
 using ApplicationLogs.Store.States;
-using Neo;
 using Neo.SmartContract;
 using Neo.VM;
 using Neo.VM.Types;

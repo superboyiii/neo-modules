@@ -19,9 +19,8 @@ using Neo.SmartContract;
 using Neo.VM;
 using static System.IO.Path;
 using Neo.ConsoleService;
-using Neo.VM.Types;
-using System.Diagnostics.Eventing.Reader;
 using Neo.SmartContract.Native;
+using System.Numerics;
 
 namespace Neo.Plugins
 {
@@ -35,7 +34,7 @@ namespace Neo.Plugins
         #endregion
 
         public override string Name => "ApplicationLogs";
-        public override string Description => "Synchronizes the smart contract log with the NativeContract log (Notify)";
+        public override string Description => "Synchronizes smart contract VM executions and notificatons (NotifyLog) on blockchain.";
 
         #region Ctor
 
@@ -161,12 +160,12 @@ namespace Neo.Plugins
         private void OutputExecutionToConsole(BlockchainExecutionModel model)
         {
             ConsoleHelper.Info("Trigger: ", $"{model.Trigger}");
-            ConsoleHelper.Info("VMState: ", $"{model.VmState}");
+            ConsoleHelper.Info("VM State: ", $"{model.VmState}");
             if (string.IsNullOrEmpty(model.Exception) == false)
-                ConsoleHelper.Info("exception: ", $"{model.Exception}");
+                ConsoleHelper.Error($"Exception: {model.Exception}");
             else
-                ConsoleHelper.Info("exception: ", "null");
-            ConsoleHelper.Info("GasConsumed: ", $"{model.GasConsumed}");
+                ConsoleHelper.Info("Exception: ", "null");
+                ConsoleHelper.Info("Gas Consumed: ", $"{new BigDecimal((BigInteger)model.GasConsumed, NativeContract.GAS.Decimals)}");
             if (model.Stack.Length == 0)
                 ConsoleHelper.Info("Stack: ", "[]");
             else
@@ -184,7 +183,7 @@ namespace Neo.Plugins
                 {
                     ConsoleHelper.Info();
                     ConsoleHelper.Info("  ScriptHash: ", $"{notifyItem.ScriptHash}");
-                    ConsoleHelper.Info("  EventName:  ", $"{notifyItem.EventName}");
+                    ConsoleHelper.Info("  Event Name:  ", $"{notifyItem.EventName}");
                     ConsoleHelper.Info("  State Parameters:");
                     for (int i = 0; i < notifyItem.State.Length; i++)
                         ConsoleHelper.Info($"    {GetMethodParameterName(notifyItem.ScriptHash, notifyItem.EventName, i)}: ", $"{notifyItem.State[i].ToJson()}");
@@ -255,7 +254,6 @@ namespace Neo.Plugins
         {
             var blockOnPersist = _neostore.GetBlockLog(blockHash, TriggerType.OnPersist);
             var blockPostPersist = _neostore.GetBlockLog(blockHash, TriggerType.PostPersist);
-            //var blockApplication = _neostore.GetBlockLog(blockHash, TriggerType.Application);
 
             if (blockOnPersist == null && blockPostPersist == null) return null;
 
@@ -267,8 +265,6 @@ namespace Neo.Plugins
                 triggerList.Add(BlockItemToJObject(blockOnPersist));
             if (blockPostPersist != null)
                 triggerList.Add(BlockItemToJObject(blockPostPersist));
-            //if (blockApplication != null)
-            //    triggerList.Add(BlockItemToJObject(blockApplication));
 
             blockJson["executions"] = triggerList.ToArray();
             return blockJson;

@@ -1,6 +1,5 @@
 using ApplicationLogs.Store.Models;
 using ApplicationLogs.Store.States;
-using Microsoft.Extensions.Logging;
 using Neo;
 using Neo.Ledger;
 using Neo.Network.P2P.Payloads;
