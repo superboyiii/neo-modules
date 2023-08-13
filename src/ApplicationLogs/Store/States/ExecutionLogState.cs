@@ -48,7 +48,7 @@ namespace ApplicationLogs.Store.States
             writer.Write(GasConsumed);
 
             writer.Write((uint)StackItemIds.Length);
-            for (int i = 0;i < StackItemIds.Length;i++)
+            for (int i = 0; i < StackItemIds.Length; i++)
                 writer.WriteVarBytes(StackItemIds[i].ToByteArray());
         }
 
@@ -59,7 +59,7 @@ namespace ApplicationLogs.Store.States
         public bool Equals(ExecutionLogState other) =>
             VmState == other.VmState && Exception == other.Exception &&
             GasConsumed == other.GasConsumed && StackItemIds.SequenceEqual(other.StackItemIds);
-        
+
         public override bool Equals(object obj) =>
             Equals(obj as ExecutionLogState);
 
