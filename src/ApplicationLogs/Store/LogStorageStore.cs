@@ -119,7 +119,14 @@ namespace ApplicationLogs.Store
             var key = new KeyBuilder(Prefix_Id, Prefix_StackItem)
                 .Add(id.ToByteArray())
                 .ToArray();
-            _snapshot.Put(key, BinarySerializer.Serialize(stackItem, uint.MaxValue / 2));
+            try
+            {
+                _snapshot.Put(key, BinarySerializer.Serialize(stackItem, uint.MaxValue / 2));
+            }
+            catch (NotSupportedException)
+            {
+                _snapshot.Put(key, BinarySerializer.Serialize(StackItem.Null, uint.MaxValue / 2));
+            }
             return id;
         }
 
