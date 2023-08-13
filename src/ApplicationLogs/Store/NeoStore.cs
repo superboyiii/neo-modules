@@ -75,12 +75,12 @@ namespace ApplicationLogs.Store
                 var model = BlockchainExecutionModel.Create(trigger, executionLogState, lstOfStackItems.ToArray());
                 if (lss.TryGetBlockState(hash, trigger, out var blockLogState))
                 {
-                    lstOfStackItems.Clear();
                     var lstOfEventModel = new List<BlockchainEventModel>();
                     foreach (var notifyLogItem in blockLogState.NotifyLogIds)
                     {
                         if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
                         {
+                            lstOfStackItems.Clear();
                             foreach (var stackItemId in notifyLogState.StackItemIds)
                             {
                                 if (lss.TryGetStackItemState(stackItemId, out var stackItem))
@@ -111,12 +111,12 @@ namespace ApplicationLogs.Store
                 var model = BlockchainExecutionModel.Create(TriggerType.Application, executionLogState, lstOfStackItems.ToArray());
                 if (lss.TryGetTransactionState(hash, out var transactionLogState))
                 {
-                    lstOfStackItems.Clear();
                     var lstOfEventModel = new List<BlockchainEventModel>();
                     foreach (var notifyLogItem in transactionLogState.NotifyLogIds)
                     {
                         if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
                         {
+                            lstOfStackItems.Clear();
                             foreach (var stackItemId in notifyLogState.StackItemIds)
                             {
                                 if (lss.TryGetStackItemState(stackItemId, out var stackItem))
