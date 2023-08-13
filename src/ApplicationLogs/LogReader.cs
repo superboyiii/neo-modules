@@ -18,6 +18,10 @@ using Neo.Persistence;
 using Neo.SmartContract;
 using Neo.VM;
 using static System.IO.Path;
+using Neo.ConsoleService;
+using Neo.VM.Types;
+using System.Diagnostics.Eventing.Reader;
+using Neo.SmartContract.Native;
 
 namespace Neo.Plugins
 {
@@ -26,6 +30,7 @@ namespace Neo.Plugins
         #region Globals
 
         private NeoStore _neostore;
+        private NeoSystem _neosystem;
 
         #endregion
 
@@ -63,10 +68,13 @@ namespace Neo.Plugins
             string path = string.Format(Settings.Default.Path, Settings.Default.Network.ToString("X8"));
             var store = system.LoadStore(GetFullPath(path));
             _neostore = new NeoStore(store);
+            _neosystem = system;
             RpcServerPlugin.RegisterMethods(this, Settings.Default.Network);
         }
 
         #endregion
+
+        #region JSON RPC Methods
 
         [RpcMethod]
         public JToken GetApplicationLog(JArray _params)
@@ -93,6 +101,41 @@ namespace Neo.Plugins
             return raw ?? JToken.Null;
         }
 
+        #endregion
+
+        #region Console Commands
+
+        [ConsoleCommand("vm block", Category = "ApplicationLog Commands")]
+        private void OnGetBlockCommand(UInt256 blockhash)
+        {
+            var blockOnPersist = _neostore.GetBlockLog(blockhash, TriggerType.OnPersist);
+            var blockPostPersist = _neostore.GetBlockLog(blockhash, TriggerType.PostPersist);
+
+            if (blockOnPersist == null && blockOnPersist == null)
+                ConsoleHelper.Error($"Block {blockhash} was not found.");
+            if (blockOnPersist != null)
+                OutputExecutionToConsole(blockOnPersist);
+            if (blockPostPersist != null)
+            {
+                ConsoleHelper.Info("--------------------------------");
+                OutputExecutionToConsole(blockPostPersist);
+            }
+        }
+
+        [ConsoleCommand("vm tx", Category = "ApplicationLog Commands")]
+        private void OnGetTransactionCommand(UInt256 txhash)
+        {
+            var txApplication = _neostore.GetTransactionLog(txhash, TriggerType.Application);
+
+            if (txApplication == null)
+                ConsoleHelper.Error($"Transaction {txhash} was not found.");
+            if (txApplication != null)
+                OutputExecutionToConsole(txApplication);
+        }
+
+
+        #endregion
+
         #region Blockchain Events
 
         private void OnCommitting(NeoSystem system, Block block, DataCache snapshot, IReadOnlyList<Blockchain.ApplicationExecuted> applicationExecutedList)
@@ -114,6 +157,49 @@ namespace Neo.Plugins
         #endregion
 
         #region Private Methods
+
+        private void OutputExecutionToConsole(BlockchainExecutionModel model)
+        {
+            ConsoleHelper.Info("Trigger: ", $"{model.Trigger}");
+            ConsoleHelper.Info("VMState: ", $"{model.VmState}");
+            if (string.IsNullOrEmpty(model.Exception) == false)
+                ConsoleHelper.Info("exception: ", $"{model.Exception}");
+            else
+                ConsoleHelper.Info("exception: ", "null");
+            ConsoleHelper.Info("GasConsumed: ", $"{model.GasConsumed}");
+            if (model.Stack.Length == 0)
+                ConsoleHelper.Info("Stack: ", "[]");
+            else
+            {
+                ConsoleHelper.Info("Stack: ");
+                for (int i = 0; i < model.Stack.Length; i++)
+                    ConsoleHelper.Info($"  {i}: ", $"{model.Stack[i].ToJson()}");
+            }
+            if (model.Notifications.Length == 0)
+                ConsoleHelper.Info("Notifications:", "[]");
+            else
+            {
+                ConsoleHelper.Info("Notifications:");
+                foreach (var notifyItem in model.Notifications)
+                {
+                    ConsoleHelper.Info();
+                    ConsoleHelper.Info("  ScriptHash: ", $"{notifyItem.ScriptHash}");
+                    ConsoleHelper.Info("  EventName:  ", $"{notifyItem.EventName}");
+                    ConsoleHelper.Info("  State Parameters:");
+                    for (int i = 0; i < notifyItem.State.Length; i++)
+                        ConsoleHelper.Info($"    {GetMethodParameterName(notifyItem.ScriptHash, notifyItem.EventName, i)}: ", $"{notifyItem.State[i].ToJson()}");
+                }
+            }
+        }
+
+        private string GetMethodParameterName(UInt160 scriptHash, string methodName, int parameterIndex)
+        {
+            var contract = NativeContract.ContractManagement.GetContract(_neosystem.StoreView, scriptHash);
+            if (contract == null)
+                return $"{parameterIndex}";
+            var contractEvent = contract.Manifest.Abi.Events.SingleOrDefault(s => s.Name == methodName);
+            return contractEvent.Parameters[parameterIndex].Name;
+        }
 
         private JObject TransactionToJObject(UInt256 txHash)
         {
