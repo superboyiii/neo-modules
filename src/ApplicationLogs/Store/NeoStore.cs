@@ -78,7 +78,7 @@ namespace ApplicationLogs.Store
             return lstModels;
         }
 
-        public IReadOnlyCollection<(BlockchainEventModel NotifyLog, UInt256 TxHash)>  GetContractLog(UInt160 scriptHash, TriggerType triggerType , uint page = 1, uint pageSize = 10)
+        public IReadOnlyCollection<(BlockchainEventModel NotifyLog, UInt256 TxHash)> GetContractLog(UInt160 scriptHash, TriggerType triggerType, uint page = 1, uint pageSize = 10)
         {
             using var lss = new LogStorageStore(_store.GetSnapshot());
             var lstModels = new List<(BlockchainEventModel NotifyLog, UInt256 TxHash)>();

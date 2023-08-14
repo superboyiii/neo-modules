@@ -108,7 +108,7 @@ namespace Neo.Plugins
 
         #region Console Commands
 
-        [ConsoleCommand("vm block", Category = "ApplicationLog Commands")]
+        [ConsoleCommand("log block", Category = "ApplicationLog Commands")]
         private void OnGetBlockCommand(UInt256 blockhash)
         {
             var blockOnPersist = _neostore.GetBlockLog(blockhash, TriggerType.OnPersist);
@@ -125,7 +125,7 @@ namespace Neo.Plugins
             }
         }
 
-        [ConsoleCommand("vm tx", Category = "ApplicationLog Commands")]
+        [ConsoleCommand("log tx", Category = "ApplicationLog Commands")]
         private void OnGetTransactionCommand(UInt256 txhash)
         {
             var txApplication = _neostore.GetTransactionLog(txhash);
@@ -136,7 +136,7 @@ namespace Neo.Plugins
                 PrintExecutionToConsole(txApplication);
         }
 
-        [ConsoleCommand("vm contract", Category = "ApplicationLog Commands")]
+        [ConsoleCommand("log contract", Category = "ApplicationLog Commands")]
         private void OnGetContractCommand(UInt160 scripthash, uint page = 1, uint pageSize = 1)
         {
             var txContract = _neostore.GetContractLog(scripthash, TriggerType.Application, page, pageSize);
@@ -180,7 +180,7 @@ namespace Neo.Plugins
                 ConsoleHelper.Error($"Exception: {model.Exception}");
             else
                 ConsoleHelper.Info("Exception: ", "null");
-                ConsoleHelper.Info("Gas Consumed: ", $"{new BigDecimal((BigInteger)model.GasConsumed, NativeContract.GAS.Decimals)}");
+            ConsoleHelper.Info("Gas Consumed: ", $"{new BigDecimal((BigInteger)model.GasConsumed, NativeContract.GAS.Decimals)}");
             if (model.Stack.Length == 0)
                 ConsoleHelper.Info("Stack: ", "[]");
             else
