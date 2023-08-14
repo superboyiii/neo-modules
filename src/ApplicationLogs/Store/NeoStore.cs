@@ -1,3 +1,13 @@
+// Copyright (C) 2015-2023 The Neo Project.
+//
+// The Neo.Plugins.ApplicationLogs is free software distributed under the MIT software license,
+// see the accompanying file LICENSE in the main directory of the
+// project or http://www.opensource.org/licenses/mit-license.php
+// for more details.
+//
+// Redistribution and use in source and binary forms with or without
+// modifications are permitted.
+
 using ApplicationLogs.Store.Models;
 using ApplicationLogs.Store.States;
 using Neo;
@@ -13,7 +23,7 @@ namespace ApplicationLogs.Store
     {
         #region Globals
 
-        private IStore _store;
+        private readonly IStore _store;
         private ISnapshot _blocklogsnapshot;
 
         #endregion
@@ -57,6 +67,28 @@ namespace ApplicationLogs.Store
 
         #endregion
 
+        #region Contract
+
+        public IReadOnlyCollection<(BlockchainEventModel NotifyLog, UInt256 TxHash)> GetContractLog(UInt160 scriptHash, uint page = 1, uint pageSize = 10)
+        {
+            using var lss = new LogStorageStore(_store.GetSnapshot());
+            var lstModels = new List<(BlockchainEventModel NotifyLog, UInt256 TxHash)>();
+            foreach (var contractState in lss.FindContractState(scriptHash, page, pageSize))
+                lstModels.Add((BlockchainEventModel.Create(contractState, CreateStackItemArray(lss, contractState.StackItemIds)), contractState.TransactionHash));
+            return lstModels;
+        }
+
+        public IReadOnlyCollection<(BlockchainEventModel NotifyLog, UInt256 TxHash)>  GetContractLog(UInt160 scriptHash, TriggerType triggerType , uint page = 1, uint pageSize = 10)
+        {
+            using var lss = new LogStorageStore(_store.GetSnapshot());
+            var lstModels = new List<(BlockchainEventModel NotifyLog, UInt256 TxHash)>();
+            foreach (var contractState in lss.FindContractState(scriptHash, triggerType, page, pageSize))
+                lstModels.Add((BlockchainEventModel.Create(contractState, CreateStackItemArray(lss, contractState.StackItemIds)), contractState.TransactionHash));
+            return lstModels;
+        }
+
+        #endregion
+
         #region Block
 
         public BlockchainExecutionModel GetBlockLog(UInt256 hash, TriggerType trigger)
@@ -65,64 +97,14 @@ namespace ApplicationLogs.Store
             if (lss.TryGetExecutionBlockState(hash, trigger, out var executionBlockStateId) &&
                 lss.TryGetExecutionState(executionBlockStateId, out var executionLogState))
             {
-                var lstOfStackItems = new List<StackItem>();
-                foreach (var stackItemId in executionLogState.StackItemIds)
-                {
-                    if (lss.TryGetStackItemState(stackItemId, out var stackItem))
-                        lstOfStackItems.Add(stackItem);
-                }
-                var model = BlockchainExecutionModel.Create(trigger, executionLogState, lstOfStackItems.ToArray());
+                var model = BlockchainExecutionModel.Create(trigger, executionLogState, CreateStackItemArray(lss, executionLogState.StackItemIds));
                 if (lss.TryGetBlockState(hash, trigger, out var blockLogState))
                 {
                     var lstOfEventModel = new List<BlockchainEventModel>();
                     foreach (var notifyLogItem in blockLogState.NotifyLogIds)
                     {
                         if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
-                        {
-                            lstOfStackItems.Clear();
-                            foreach (var stackItemId in notifyLogState.StackItemIds)
-                            {
-                                if (lss.TryGetStackItemState(stackItemId, out var stackItem))
-                                    lstOfStackItems.Add(stackItem);
-                            }
-                            lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, lstOfStackItems.ToArray()));
-                        }
-                    }
-                    model.Notifications = lstOfEventModel.ToArray();
-                }
-                return model;
-            }
-            return null;
-        }
-
-        public BlockchainExecutionModel GetTransactionLog(UInt256 hash)
-        {
-            using var lss = new LogStorageStore(_store.GetSnapshot());
-            if (lss.TryGetExecutionTransactionState(hash, out var executionTransactionStateId) &&
-                lss.TryGetExecutionState(executionTransactionStateId, out var executionLogState))
-            {
-                var lstOfStackItems = new List<StackItem>();
-                foreach (var stackItemId in executionLogState.StackItemIds)
-                {
-                    if (lss.TryGetStackItemState(stackItemId, out var stackItem))
-                        lstOfStackItems.Add(stackItem);
-                }
-                var model = BlockchainExecutionModel.Create(TriggerType.Application, executionLogState, lstOfStackItems.ToArray());
-                if (lss.TryGetTransactionState(hash, out var transactionLogState))
-                {
-                    var lstOfEventModel = new List<BlockchainEventModel>();
-                    foreach (var notifyLogItem in transactionLogState.NotifyLogIds)
-                    {
-                        if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
-                        {
-                            lstOfStackItems.Clear();
-                            foreach (var stackItemId in notifyLogState.StackItemIds)
-                            {
-                                if (lss.TryGetStackItemState(stackItemId, out var stackItem))
-                                    lstOfStackItems.Add(stackItem);
-                            }
-                            lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, lstOfStackItems.ToArray()));
-                        }
+                            lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, CreateStackItemArray(lss, notifyLogState.StackItemIds)));
                     }
                     model.Notifications = lstOfEventModel.ToArray();
                 }
@@ -133,7 +115,6 @@ namespace ApplicationLogs.Store
 
         public void PutBlockLog(Block block, IReadOnlyList<Blockchain.ApplicationExecuted> applicationExecutedList)
         {
-
             foreach (var appExecution in applicationExecutedList)
             {
                 using var lss = new LogStorageStore(_blocklogsnapshot);
@@ -142,9 +123,9 @@ namespace ApplicationLogs.Store
             }
         }
 
-        private Guid PutExecutionLogBlock(LogStorageStore logStore, Block block, Blockchain.ApplicationExecuted appExecution)
+        private static Guid PutExecutionLogBlock(LogStorageStore logStore, Block block, Blockchain.ApplicationExecuted appExecution)
         {
-            var exeStateId = logStore.PutExecutionState(ExecutionLogState.Create(appExecution, CreateStackItemIdList(logStore, block, appExecution)));
+            var exeStateId = logStore.PutExecutionState(ExecutionLogState.Create(appExecution, CreateStackItemIdList(logStore, appExecution)));
             logStore.PutExecutionBlockState(block.Hash, appExecution.Trigger, exeStateId);
             return exeStateId;
         }
@@ -153,18 +134,40 @@ namespace ApplicationLogs.Store
 
         #region Transaction
 
-        private void PutBlockAndTransactionLog(LogStorageStore logStore, Block block, Blockchain.ApplicationExecuted appExecution, Guid executionStateId)
+        public BlockchainExecutionModel GetTransactionLog(UInt256 hash)
+        {
+            using var lss = new LogStorageStore(_store.GetSnapshot());
+            if (lss.TryGetExecutionTransactionState(hash, out var executionTransactionStateId) &&
+                lss.TryGetExecutionState(executionTransactionStateId, out var executionLogState))
+            {
+                var model = BlockchainExecutionModel.Create(TriggerType.Application, executionLogState, CreateStackItemArray(lss, executionLogState.StackItemIds));
+                if (lss.TryGetTransactionState(hash, out var transactionLogState))
+                {
+                    var lstOfEventModel = new List<BlockchainEventModel>();
+                    foreach (var notifyLogItem in transactionLogState.NotifyLogIds)
+                    {
+                        if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
+                            lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, CreateStackItemArray(lss, notifyLogState.StackItemIds)));
+                    }
+                    model.Notifications = lstOfEventModel.ToArray();
+                }
+                return model;
+            }
+            return null;
+        }
+
+        private static void PutBlockAndTransactionLog(LogStorageStore logStore, Block block, Blockchain.ApplicationExecuted appExecution, Guid executionStateId)
         {
             if (appExecution.Transaction != null)
                 logStore.PutExecutionTransactionState(appExecution.Transaction.Hash, executionStateId); // For looking up execution log by transaction hash
 
             var lstNotifyLogIds = new List<Guid>();
-            for (int i = 0; i < appExecution.Notifications.Length; i++)
+            for (uint i = 0; i < appExecution.Notifications.Length; i++)
             {
                 var notifyItem = appExecution.Notifications[i];
                 var stackItemStateIds = CreateStackItemIdList(logStore, notifyItem); // Save notify stack items
-                logStore.PutContractState(notifyItem.ScriptHash, block.Timestamp, (uint)i, // For looking up contract stack items by contract scriptHash
-                    ContractLogState.Create(appExecution.Transaction?.Hash, appExecution.Trigger, notifyItem.EventName, stackItemStateIds));
+                logStore.PutContractState(notifyItem.ScriptHash, block.Timestamp, i, // save notifylog for the contracts
+                    ContractLogState.Create(appExecution, notifyItem, stackItemStateIds));
                 lstNotifyLogIds.Add(logStore.PutNotifyState(NotifyLogState.Create(notifyItem, stackItemStateIds)));
             }
 
@@ -178,7 +181,16 @@ namespace ApplicationLogs.Store
 
         #region StackItem
 
-        private Guid[] CreateStackItemIdList(LogStorageStore logStore, Block block, Blockchain.ApplicationExecuted appExecution)
+        private static StackItem[] CreateStackItemArray(LogStorageStore logStore, Guid[] stackItemIds)
+        {
+            var lstStackItems = new List<StackItem>();
+            foreach (var stackItemId in stackItemIds)
+                if (logStore.TryGetStackItemState(stackItemId, out var stackItem))
+                    lstStackItems.Add(stackItem);
+            return lstStackItems.ToArray();
+        }
+
+        private static Guid[] CreateStackItemIdList(LogStorageStore logStore, Blockchain.ApplicationExecuted appExecution)
         {
             var lstStackItemIds = new List<Guid>();
             foreach (var stackItem in appExecution.Stack)
@@ -186,7 +198,7 @@ namespace ApplicationLogs.Store
             return lstStackItemIds.ToArray();
         }
 
-        private Guid[] CreateStackItemIdList(LogStorageStore logStore, NotifyEventArgs notifyEventArgs)
+        private static Guid[] CreateStackItemIdList(LogStorageStore logStore, NotifyEventArgs notifyEventArgs)
         {
             var lstStackItemIds = new List<Guid>();
             foreach (var stackItem in notifyEventArgs.State)

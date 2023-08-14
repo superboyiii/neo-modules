@@ -1,7 +1,18 @@
+// Copyright (C) 2015-2023 The Neo Project.
+//
+// The Neo.Plugins.ApplicationLogs is free software distributed under the MIT software license,
+// see the accompanying file LICENSE in the main directory of the
+// project or http://www.opensource.org/licenses/mit-license.php
+// for more details.
+//
+// Redistribution and use in source and binary forms with or without
+// modifications are permitted.
+
 using ApplicationLogs.Store.States;
 using Neo;
 using Neo.IO;
 using Neo.Persistence;
+using Neo.Plugins;
 using Neo.SmartContract;
 using Neo.VM;
 using Neo.VM.Types;
@@ -127,11 +138,11 @@ namespace ApplicationLogs.Store
                 .ToArray();
             try
             {
-                _snapshot.Put(key, BinarySerializer.Serialize(stackItem, uint.MaxValue / 2));
+                _snapshot.Put(key, BinarySerializer.Serialize(stackItem, (uint)Settings.Default.MaxStackSize));
             }
             catch (NotSupportedException)
             {
-                _snapshot.Put(key, BinarySerializer.Serialize(StackItem.Null, uint.MaxValue / 2));
+                _snapshot.Put(key, BinarySerializer.Serialize(StackItem.Null, (uint)Settings.Default.MaxStackSize));
             }
             return id;
         }
@@ -161,10 +172,10 @@ namespace ApplicationLogs.Store
                 .ToArray();
             var prefixKey = new KeyBuilder(Prefix_Id, Prefix_Contract)
                 .Add(scriptHash)
-                .AddBigEndian(ulong.MaxValue)
+                .AddBigEndian(ulong.MaxValue) // Get newest to oldest (timestamp)
                 .ToArray();
             uint index = 1;
-            foreach (var (key, value) in _snapshot.Seek(prefixKey, SeekDirection.Backward))
+            foreach (var (key, value) in _snapshot.Seek(prefixKey, SeekDirection.Backward)) // Get newest to oldest
             {
                 if (key.AsSpan().StartsWith(prefix))
                 {
@@ -184,10 +195,10 @@ namespace ApplicationLogs.Store
                 .ToArray();
             var prefixKey = new KeyBuilder(Prefix_Id, Prefix_Contract)
                 .Add(scriptHash)
-                .AddBigEndian(ulong.MaxValue)
+                .AddBigEndian(ulong.MaxValue) // Get newest to oldest (timestamp)
                 .ToArray();
             uint index = 1;
-            foreach (var (key, value) in _snapshot.Seek(prefixKey, SeekDirection.Backward))
+            foreach (var (key, value) in _snapshot.Seek(prefixKey, SeekDirection.Backward)) // Get newest to oldest
             {
                 if (key.AsSpan().StartsWith(prefix))
                 {
@@ -261,16 +272,8 @@ namespace ApplicationLogs.Store
                 .Add(executionStateId.ToByteArray())
                 .ToArray();
             var data = _snapshot.TryGet(key);
-            if (data == null)
-            {
-                state = null;
-                return false;
-            }
-            else
-            {
-                state = data.AsSerializable<ExecutionLogState>();
-                return true;
-            }
+            state = data?.AsSerializable<ExecutionLogState>();
+            return data != null && data.Length > 0;
         }
 
         public bool TryGetExecutionBlockState(UInt256 blockHash, TriggerType trigger, out Guid executionStateId)

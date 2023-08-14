@@ -78,26 +78,30 @@ namespace Neo.Plugins
         [RpcMethod]
         public JToken GetApplicationLog(JArray _params)
         {
-            UInt256 hash = UInt256.Parse(_params[0].AsString());
-            var raw = BlockToJObject(hash);
-            if (raw == null)
-                raw = TransactionToJObject(hash);
-            if (raw == null)
-                throw new RpcException(-100, "Unknown transaction/blockhash");
-
-            if (_params.Count >= 2 && Enum.TryParse(_params[1].AsString(), true, out TriggerType triggerType))
+            if (UInt256.TryParse(_params[0].AsString(), out var hash))
             {
-                var executions = raw["executions"] as JArray;
-                for (int i = 0; i < executions.Count;)
-                {
-                    if (executions[i]["trigger"].AsString().Equals(triggerType.ToString(), StringComparison.OrdinalIgnoreCase) == false)
-                        executions.RemoveAt(i);
-                    else
-                        i++;
-                }
-            }
+                var raw = BlockToJObject(hash);
+                if (raw == null)
+                    raw = TransactionToJObject(hash);
+                if (raw == null)
+                    throw new RpcException(-100, "Unknown transaction/blockhash");
 
-            return raw ?? JToken.Null;
+                if (_params.Count >= 2 && Enum.TryParse(_params[1].AsString(), true, out TriggerType triggerType))
+                {
+                    var executions = raw["executions"] as JArray;
+                    for (int i = 0; i < executions.Count;)
+                    {
+                        if (executions[i]["trigger"].AsString().Equals(triggerType.ToString(), StringComparison.OrdinalIgnoreCase) == false)
+                            executions.RemoveAt(i);
+                        else
+                            i++;
+                    }
+                }
+
+                return raw ?? JToken.Null;
+            }
+            else
+                throw new RpcException(-100, "Invalid format/hash");
         }
 
         #endregion
@@ -111,13 +115,13 @@ namespace Neo.Plugins
             var blockPostPersist = _neostore.GetBlockLog(blockhash, TriggerType.PostPersist);
 
             if (blockOnPersist == null && blockOnPersist == null)
-                ConsoleHelper.Error($"Block {blockhash} was not found.");
+                ConsoleHelper.Error($"No notify logs.");
             if (blockOnPersist != null)
-                OutputExecutionToConsole(blockOnPersist);
+                PrintExecutionToConsole(blockOnPersist);
             if (blockPostPersist != null)
             {
                 ConsoleHelper.Info("--------------------------------");
-                OutputExecutionToConsole(blockPostPersist);
+                PrintExecutionToConsole(blockPostPersist);
             }
         }
 
@@ -127,9 +131,20 @@ namespace Neo.Plugins
             var txApplication = _neostore.GetTransactionLog(txhash);
 
             if (txApplication == null)
-                ConsoleHelper.Error($"Transaction {txhash} was not found.");
-            if (txApplication != null)
-                OutputExecutionToConsole(txApplication);
+                ConsoleHelper.Error($"No notify logs.");
+            else
+                PrintExecutionToConsole(txApplication);
+        }
+
+        [ConsoleCommand("vm contract", Category = "ApplicationLog Commands")]
+        private void OnGetContractCommand(UInt160 scripthash, uint page = 1, uint pageSize = 1)
+        {
+            var txContract = _neostore.GetContractLog(scripthash, TriggerType.Application, page, pageSize);
+
+            if (txContract.Count == 0)
+                ConsoleHelper.Error($"No notify logs.");
+            else
+                PrintEventModelToConsole(txContract);
         }
 
 
@@ -157,7 +172,7 @@ namespace Neo.Plugins
 
         #region Private Methods
 
-        private void OutputExecutionToConsole(BlockchainExecutionModel model)
+        private void PrintExecutionToConsole(BlockchainExecutionModel model)
         {
             ConsoleHelper.Info("Trigger: ", $"{model.Trigger}");
             ConsoleHelper.Info("VM State: ", $"{model.VmState}");
@@ -188,6 +203,20 @@ namespace Neo.Plugins
                     for (int i = 0; i < notifyItem.State.Length; i++)
                         ConsoleHelper.Info($"    {GetMethodParameterName(notifyItem.ScriptHash, notifyItem.EventName, i)}: ", $"{notifyItem.State[i].ToJson()}");
                 }
+            }
+        }
+
+        private void PrintEventModelToConsole(IReadOnlyCollection<(BlockchainEventModel NotifyLog, UInt256 TxHash)> models)
+        {
+            foreach (var (notifyItem, txhash) in models)
+            {
+                ConsoleHelper.Info("Transaction Hash: ", $"{txhash}");
+                ConsoleHelper.Info();
+                ConsoleHelper.Info("  Event Name:  ", $"{notifyItem.EventName}");
+                ConsoleHelper.Info("  State Parameters:");
+                for (int i = 0; i < notifyItem.State.Length; i++)
+                    ConsoleHelper.Info($"    {GetMethodParameterName(notifyItem.ScriptHash, notifyItem.EventName, i)}: ", $"{notifyItem.State[i].ToJson()}");
+                ConsoleHelper.Info("--------------------------------");
             }
         }
 

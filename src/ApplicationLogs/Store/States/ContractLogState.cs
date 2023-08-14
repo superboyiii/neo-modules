@@ -1,5 +1,16 @@
+// Copyright (C) 2015-2023 The Neo Project.
+//
+// The Neo.Plugins.ApplicationLogs is free software distributed under the MIT software license,
+// see the accompanying file LICENSE in the main directory of the
+// project or http://www.opensource.org/licenses/mit-license.php
+// for more details.
+//
+// Redistribution and use in source and binary forms with or without
+// modifications are permitted.
+
 using Neo;
 using Neo.IO;
+using Neo.Ledger;
 using Neo.SmartContract;
 
 namespace ApplicationLogs.Store.States
@@ -9,12 +20,13 @@ namespace ApplicationLogs.Store.States
         public UInt256 TransactionHash { get; set; } = new();
         public TriggerType Trigger { get; set; } = TriggerType.All;
 
-        public static ContractLogState Create(UInt256 txHash, TriggerType trigger, string eventName, Guid[] stackItemIds) =>
+        public static ContractLogState Create(Blockchain.ApplicationExecuted applicationExecuted, NotifyEventArgs notifyEventArgs, Guid[] stackItemIds) =>
             new()
             {
-                TransactionHash = txHash ?? new(),
-                Trigger = trigger,
-                EventName = eventName,
+                TransactionHash = applicationExecuted.Transaction?.Hash ?? new(),
+                ScriptHash = notifyEventArgs.ScriptHash,
+                Trigger = applicationExecuted.Trigger,
+                EventName = notifyEventArgs.EventName,
                 StackItemIds = stackItemIds,
             };
 
