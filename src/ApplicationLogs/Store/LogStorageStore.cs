@@ -215,6 +215,33 @@ namespace ApplicationLogs.Store
             }
         }
 
+        public IEnumerable<ContractLogState> FindContractState(UInt160 scriptHash, TriggerType trigger, string eventName, uint page, uint pageSize)
+        {
+            var prefix = new KeyBuilder(Prefix_Id, Prefix_Contract)
+                .Add(scriptHash)
+                .ToArray();
+            var prefixKey = new KeyBuilder(Prefix_Id, Prefix_Contract)
+                .Add(scriptHash)
+                .AddBigEndian(ulong.MaxValue) // Get newest to oldest (timestamp)
+                .ToArray();
+            uint index = 1;
+            foreach (var (key, value) in _snapshot.Seek(prefixKey, SeekDirection.Backward)) // Get newest to oldest
+            {
+                if (key.AsSpan().StartsWith(prefix))
+                {
+                    var state = value.AsSerializable<ContractLogState>();
+                    if (state.Trigger == trigger && state.EventName.Equals(eventName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (index >= page && index < (pageSize + page))
+                            yield return state;
+                        index++;
+                    }
+                }
+                else
+                    yield break;
+            }
+        }
+
         public IEnumerable<(Guid ExecutionStateId, TriggerType Trigger)> FindExecutionBlockState(UInt256 hash)
         {
             var prefixKey = new KeyBuilder(Prefix_Id, Prefix_Execution_Block)

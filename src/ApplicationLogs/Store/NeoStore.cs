@@ -87,6 +87,15 @@ namespace ApplicationLogs.Store
             return lstModels;
         }
 
+        public IReadOnlyCollection<(BlockchainEventModel NotifyLog, UInt256 TxHash)> GetContractLog(UInt160 scriptHash, TriggerType triggerType, string eventName, uint page = 1, uint pageSize = 10)
+        {
+            using var lss = new LogStorageStore(_store.GetSnapshot());
+            var lstModels = new List<(BlockchainEventModel NotifyLog, UInt256 TxHash)>();
+            foreach (var contractState in lss.FindContractState(scriptHash, triggerType, eventName, page, pageSize))
+                lstModels.Add((BlockchainEventModel.Create(contractState, CreateStackItemArray(lss, contractState.StackItemIds)), contractState.TransactionHash));
+            return lstModels;
+        }
+
         #endregion
 
         #region Block
@@ -105,6 +114,31 @@ namespace ApplicationLogs.Store
                     {
                         if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
                             lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, CreateStackItemArray(lss, notifyLogState.StackItemIds)));
+                    }
+                    model.Notifications = lstOfEventModel.ToArray();
+                }
+                return model;
+            }
+            return null;
+        }
+
+        public BlockchainExecutionModel GetBlockLog(UInt256 hash, TriggerType trigger, string eventName)
+        {
+            using var lss = new LogStorageStore(_store.GetSnapshot());
+            if (lss.TryGetExecutionBlockState(hash, trigger, out var executionBlockStateId) &&
+                lss.TryGetExecutionState(executionBlockStateId, out var executionLogState))
+            {
+                var model = BlockchainExecutionModel.Create(trigger, executionLogState, CreateStackItemArray(lss, executionLogState.StackItemIds));
+                if (lss.TryGetBlockState(hash, trigger, out var blockLogState))
+                {
+                    var lstOfEventModel = new List<BlockchainEventModel>();
+                    foreach (var notifyLogItem in blockLogState.NotifyLogIds)
+                    {
+                        if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
+                        {
+                            if (notifyLogState.EventName.Equals(eventName, StringComparison.OrdinalIgnoreCase))
+                                lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, CreateStackItemArray(lss, notifyLogState.StackItemIds)));
+                        }
                     }
                     model.Notifications = lstOfEventModel.ToArray();
                 }
@@ -148,6 +182,31 @@ namespace ApplicationLogs.Store
                     {
                         if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
                             lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, CreateStackItemArray(lss, notifyLogState.StackItemIds)));
+                    }
+                    model.Notifications = lstOfEventModel.ToArray();
+                }
+                return model;
+            }
+            return null;
+        }
+
+        public BlockchainExecutionModel GetTransactionLog(UInt256 hash, string eventName)
+        {
+            using var lss = new LogStorageStore(_store.GetSnapshot());
+            if (lss.TryGetExecutionTransactionState(hash, out var executionTransactionStateId) &&
+                lss.TryGetExecutionState(executionTransactionStateId, out var executionLogState))
+            {
+                var model = BlockchainExecutionModel.Create(TriggerType.Application, executionLogState, CreateStackItemArray(lss, executionLogState.StackItemIds));
+                if (lss.TryGetTransactionState(hash, out var transactionLogState))
+                {
+                    var lstOfEventModel = new List<BlockchainEventModel>();
+                    foreach (var notifyLogItem in transactionLogState.NotifyLogIds)
+                    {
+                        if (lss.TryGetNotifyState(notifyLogItem, out var notifyLogState))
+                        {
+                            if (notifyLogState.EventName.Equals(eventName, StringComparison.OrdinalIgnoreCase))
+                                lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, CreateStackItemArray(lss, notifyLogState.StackItemIds)));
+                        }
                     }
                     model.Notifications = lstOfEventModel.ToArray();
                 }

@@ -109,10 +109,14 @@ namespace Neo.Plugins
         #region Console Commands
 
         [ConsoleCommand("log block", Category = "ApplicationLog Commands")]
-        private void OnGetBlockCommand(UInt256 blockhash)
+        private void OnGetBlockCommand(UInt256 blockhash, string eventName = null)
         {
-            var blockOnPersist = _neostore.GetBlockLog(blockhash, TriggerType.OnPersist);
-            var blockPostPersist = _neostore.GetBlockLog(blockhash, TriggerType.PostPersist);
+            var blockOnPersist = string.IsNullOrEmpty(eventName) ?
+                _neostore.GetBlockLog(blockhash, TriggerType.OnPersist) :
+                _neostore.GetBlockLog(blockhash, TriggerType.OnPersist, eventName);
+            var blockPostPersist = string.IsNullOrEmpty(eventName) ?
+                _neostore.GetBlockLog(blockhash, TriggerType.PostPersist) :
+                _neostore.GetBlockLog(blockhash, TriggerType.PostPersist, eventName);
 
             if (blockOnPersist == null && blockOnPersist == null)
                 ConsoleHelper.Error($"No notify logs.");
@@ -126,9 +130,11 @@ namespace Neo.Plugins
         }
 
         [ConsoleCommand("log tx", Category = "ApplicationLog Commands")]
-        private void OnGetTransactionCommand(UInt256 txhash)
+        private void OnGetTransactionCommand(UInt256 txhash, string eventName = null)
         {
-            var txApplication = _neostore.GetTransactionLog(txhash);
+            var txApplication = string.IsNullOrEmpty(eventName) ?
+                _neostore.GetTransactionLog(txhash) :
+                _neostore.GetTransactionLog(txhash, eventName);
 
             if (txApplication == null)
                 ConsoleHelper.Error($"No notify logs.");
@@ -137,9 +143,11 @@ namespace Neo.Plugins
         }
 
         [ConsoleCommand("log contract", Category = "ApplicationLog Commands")]
-        private void OnGetContractCommand(UInt160 scripthash, uint page = 1, uint pageSize = 1)
+        private void OnGetContractCommand(UInt160 scripthash, string eventName = null, uint page = 1, uint pageSize = 1)
         {
-            var txContract = _neostore.GetContractLog(scripthash, TriggerType.Application, page, pageSize);
+            var txContract = string.IsNullOrEmpty(eventName) ?
+                _neostore.GetContractLog(scripthash, TriggerType.Application, page, pageSize) :
+                _neostore.GetContractLog(scripthash, TriggerType.Application, eventName, page, pageSize);
 
             if (txContract.Count == 0)
                 ConsoleHelper.Error($"No notify logs.");
