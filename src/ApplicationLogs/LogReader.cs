@@ -76,8 +76,57 @@ namespace Neo.Plugins
         #region JSON RPC Methods
 
         [RpcMethod]
+        public JToken GetNotificationLog(JArray _params)
+        {
+            if (_params == null || _params.Count == 0) throw new RpcException(-32602, "Invalid params");
+            if (UInt256.TryParse(_params[0].AsString(), out var hash))
+            {
+                var eventNamme = string.Empty;
+                var trigger = TriggerType.All;
+
+                if (_params.Count >= 2)
+                    eventNamme = _params[1].AsString();
+                if (_params.Count == 3)
+                    Enum.TryParse(_params[2].AsString(), true, out trigger);
+
+                var chainEvents = new List<JObject>();
+                BlockchainExecutionModel model;
+
+                if (trigger.HasFlag(TriggerType.OnPersist) || trigger == TriggerType.OnPersist)
+                {
+                    model = string.IsNullOrEmpty(eventNamme) ?
+                        _neostore.GetBlockLog(hash, TriggerType.OnPersist) :
+                        _neostore.GetBlockLog(hash, TriggerType.OnPersist, eventNamme);
+                    if (model != null)
+                        chainEvents.AddRange(model.Notifications.Select(EventModelToJObject));
+                }
+                if (trigger.HasFlag(TriggerType.PostPersist) || trigger == TriggerType.PostPersist)
+                {
+                    model = string.IsNullOrEmpty(eventNamme) ?
+                        _neostore.GetBlockLog(hash, TriggerType.PostPersist) :
+                        _neostore.GetBlockLog(hash, TriggerType.PostPersist, eventNamme);
+                    if (model != null)
+                        chainEvents.AddRange(model.Notifications.Select(EventModelToJObject));
+                }
+                if (trigger.HasFlag(TriggerType.Application) || trigger == TriggerType.Application)
+                {
+                    model = string.IsNullOrEmpty(eventNamme) ?
+                        _neostore.GetTransactionLog(hash) :
+                        _neostore.GetTransactionLog(hash, eventNamme);
+                    if (model != null)
+                        chainEvents.AddRange(model.Notifications.Select(EventModelToJObject));
+                }
+
+                return new JArray(chainEvents.ToArray());
+            }
+            else
+                throw new RpcException(-32602, "Invalid params");
+        }
+
+        [RpcMethod]
         public JToken GetApplicationLog(JArray _params)
         {
+            if (_params == null || _params.Count == 0) throw new RpcException(-32602, "Invalid params");
             if (UInt256.TryParse(_params[0].AsString(), out var hash))
             {
                 var raw = BlockToJObject(hash);
@@ -101,7 +150,7 @@ namespace Neo.Plugins
                 return raw ?? JToken.Null;
             }
             else
-                throw new RpcException(-100, "Invalid format/hash");
+                throw new RpcException(-32602, "Invalid params");
         }
 
         #endregion
@@ -235,6 +284,15 @@ namespace Neo.Plugins
                 return $"{parameterIndex}";
             var contractEvent = contract.Manifest.Abi.Events.SingleOrDefault(s => s.Name == methodName);
             return contractEvent.Parameters[parameterIndex].Name;
+        }
+
+        private JObject EventModelToJObject(BlockchainEventModel model)
+        {
+            var root = new JObject();
+            root["contract"] = model.ScriptHash.ToString();
+            root["eventname"] = model.EventName;
+            root["state"] = model.State.Select(s => s.ToJson()).ToArray();
+            return root;
         }
 
         private JObject TransactionToJObject(UInt256 txHash)
