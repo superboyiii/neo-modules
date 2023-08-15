@@ -25,7 +25,7 @@ namespace ApplicationLogs.Store.States
             new()
             {
                 VmState = appExecution.VMState,
-                Exception = appExecution.Exception?.InnerException?.Message,
+                Exception = appExecution.Exception?.InnerException?.Message ?? appExecution.Exception?.Message,
                 GasConsumed = appExecution.GasConsumed,
                 StackItemIds = stackItemIds,
             };
