@@ -143,7 +143,7 @@ namespace Neo.Plugins
         }
 
         [ConsoleCommand("log contract", Category = "ApplicationLog Commands")]
-        private void OnGetContractCommand(UInt160 scripthash, string eventName = null, uint page = 1, uint pageSize = 1)
+        private void OnGetContractCommand(UInt160 scripthash, uint page = 1, uint pageSize = 1, string eventName = null)
         {
             var txContract = string.IsNullOrEmpty(eventName) ?
                 _neostore.GetContractLog(scripthash, TriggerType.Application, page, pageSize) :
