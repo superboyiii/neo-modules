@@ -10,12 +10,14 @@ namespace Neo.Plugins.Storage.Tests
     {
         private const string path_leveldb = "Data_LevelDB_UT";
         private const string path_rocksdb = "Data_RocksDB_UT";
+        private const string path_fasterdb = "Data_FasterDB_UT";
 
         [TestInitialize]
         public void OnStart()
         {
             if (Directory.Exists(path_leveldb)) Directory.Delete(path_leveldb, true);
             if (Directory.Exists(path_rocksdb)) Directory.Delete(path_rocksdb, true);
+            if (Directory.Exists(path_fasterdb)) Directory.Delete(path_fasterdb, true);
         }
 
         [TestMethod]
@@ -67,6 +69,25 @@ namespace Neo.Plugins.Storage.Tests
             TestPersistenceRead(plugin.GetStore(path_rocksdb), true);
             TestPersistenceDelete(plugin.GetStore(path_rocksdb));
             TestPersistenceRead(plugin.GetStore(path_rocksdb), false);
+        }
+
+        [TestMethod]
+        public void TestFasterDb()
+        {
+            using var plugin = new FasterDBStore();
+            TestPersistenceDelete(plugin.GetStore(path_fasterdb));
+            // Test all with the same store
+
+            TestStorage(plugin.GetStore(path_fasterdb));
+
+            TestSnapshot(plugin.GetStore(path_fasterdb));
+
+            // Test with different storages
+
+            TestPersistenceWrite(plugin.GetStore(path_fasterdb));
+            TestPersistenceRead(plugin.GetStore(path_fasterdb), true);
+            TestPersistenceDelete(plugin.GetStore(path_fasterdb));
+            TestPersistenceRead(plugin.GetStore(path_fasterdb), false);
         }
 
         /// <summary>
@@ -144,6 +165,35 @@ namespace Neo.Plugins.Storage.Tests
                 CollectionAssert.AreEqual(new byte[] { 0x00, 0x00, 0x00 }, entries[1].Key);
                 CollectionAssert.AreEqual(new byte[] { 0x00 }, entries[1].Value);
             }
+        }
+
+        /// <summary>
+        /// Test Put/Delete/TryGet/Seek
+        /// </summary>
+        /// <param name="store">Store</param>
+        private void TestSnapshot(IStore store)
+        {
+            using (var snapshot = store.GetSnapshot())
+            {
+                // Test seek in order
+
+                snapshot.Put(new byte[] { 0x01, 0x00, 0x04 }, new byte[] { 0x04 });
+                snapshot.Put(new byte[] { 0x01, 0x00, 0x00 }, new byte[] { 0x00 });
+                snapshot.Put(new byte[] { 0x01, 0x00, 0x01 }, new byte[] { 0x01 });
+                snapshot.Put(new byte[] { 0x01, 0x00, 0x02 }, new byte[] { 0x02 });
+                snapshot.Put(new byte[] { 0x01, 0x00, 0x03 }, new byte[] { 0x03 });
+                snapshot.Commit();
+            }
+            // Seek Forward
+
+            var entries = store.Seek(new byte[] { 0x01, 0x00, 0x02 }, SeekDirection.Forward).ToArray();
+            Assert.AreEqual(3, entries.Length);
+            CollectionAssert.AreEqual(new byte[] { 0x01, 0x00, 0x02 }, entries[0].Key);
+            CollectionAssert.AreEqual(new byte[] { 0x02 }, entries[0].Value);
+            CollectionAssert.AreEqual(new byte[] { 0x01, 0x00, 0x03 }, entries[1].Key);
+            CollectionAssert.AreEqual(new byte[] { 0x03 }, entries[1].Value);
+            CollectionAssert.AreEqual(new byte[] { 0x01, 0x00, 0x04 }, entries[2].Key);
+            CollectionAssert.AreEqual(new byte[] { 0x04 }, entries[2].Value);
         }
 
         /// <summary>
