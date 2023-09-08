@@ -95,7 +95,7 @@ namespace Neo.Plugins.Storage
         internal IEnumerable<(byte[] key, byte[] value)> SeekKeyValuesPairs(byte[] keyOrPrefix, ByteArrayComparer comparer)
         {
             using var session = _store.For(new ByteArrayFunctions()).NewSession<ByteArrayFunctions>();
-            using var it = session.Iterate();
+            using var it = session.Iterate(_store.Log.TailAddress);
             while (it.GetNext(out _))
             {
                 var keyArray = it.GetKey();
