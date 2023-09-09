@@ -1,3 +1,4 @@
+using Akka.Actor;
 using FASTER.core;
 using Neo.Persistence;
 using System;
@@ -9,34 +10,47 @@ namespace Neo.Plugins.Storage
 {
     public class FasterStore : IStore
     {
-        readonly AsyncPool<ClientSession<byte[], byte[], byte[], byte[], Empty, ByteArrayFunctions>> _sessionPool;
-        private readonly FasterKVSettings<byte[], byte[]> _settings;
+        private readonly LogSettings _logSettings;
+        private readonly CheckpointSettings _checkpointSettings;
         private readonly FasterKV<byte[], byte[]> _store;
 
-        public string StorePath { get; }
-
+        public AsyncPool<ClientSession<byte[], byte[], byte[], byte[], Empty, ByteArrayFunctions>> SessionPool { get; }
         public FasterStore(string path)
         {
-            StorePath = path;
-            _settings = new(Path.GetFullPath(path))
+            var storePath = Path.GetFullPath(path);
+            _logSettings = new LogSettings()
             {
-                TryRecoverLatest = true,
+                LogDevice = new ManagedLocalStorageDevice(Path.Combine(storePath, "LOG"), recoverDevice: true, osReadBuffering: true),
+                ObjectLogDevice = new ManagedLocalStorageDevice(Path.Combine(storePath, "DATA"), recoverDevice: true, osReadBuffering: true),
+                //PageSizeBits = 9,
+                //SegmentSizeBits = 9,
+                //MemorySizeBits = 11,
+                //MutableFraction = 0.5,
             };
-            _store = new(_settings);
-            _sessionPool = new AsyncPool<ClientSession<byte[], byte[], byte[], byte[], Empty, ByteArrayFunctions>>(
-                    _settings.LogDevice.ThrottleLimit,
+            _checkpointSettings = new CheckpointSettings()
+            {
+                CheckpointManager = new DeviceLogCommitCheckpointManager(
+                    new LocalStorageNamedDeviceFactory(),
+                    new NeoCheckpointNamingScheme(storePath)),
+                RemoveOutdated = true,
+            };
+            _store = new(
+                1L << 20,
+                _logSettings,
+                _checkpointSettings,
+                tryRecoverLatest: true);
+            SessionPool = new AsyncPool<ClientSession<byte[], byte[], byte[], byte[], Empty, ByteArrayFunctions>>(
+                    _logSettings.LogDevice.ThrottleLimit,
                     () => _store.For(new ByteArrayFunctions()).NewSession<ByteArrayFunctions>());
         }
 
         public void Dispose()
         {
-            _store.TakeFullCheckpointAsync(CheckpointType.Snapshot).AsTask().GetAwaiter().GetResult();
+            _store.TryInitiateHybridLogCheckpoint(out _, CheckpointType.FoldOver);
             _store.CompleteCheckpointAsync().AsTask().GetAwaiter().GetResult();
-            _store.Log.DisposeFromMemory();
-            _store.Log.FlushAndEvict(true);
+            //_store.Log.FlushAndEvict(true);
             _store.Dispose();
-            _settings.Dispose();
-            _sessionPool.Dispose();
+            SessionPool.Dispose();
             GC.SuppressFinalize(this);
         }
 
@@ -47,23 +61,29 @@ namespace Neo.Plugins.Storage
 
         public void Delete(byte[] key)
         {
-            if (!_sessionPool.TryGet(out var session))
-                session = _sessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
+            if (SessionPool.TryGet(out var session) == false)
+                session = SessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
             var status = session.Delete(key);
-            _store.TryInitiateHybridLogCheckpoint(out _, CheckpointType.Snapshot, true);
-            _sessionPool.Return(session);
+            if (status.IsPending)
+                session.CompletePending(true);
+            SessionPool.Return(session);
         }
 
-        public ISnapshot GetSnapshot() =>
-            new FasterSnapshot(this);
+        public ISnapshot GetSnapshot()
+        {
+            _store.TryInitiateHybridLogCheckpoint(out _, CheckpointType.Snapshot);
+            //_store.Log.Flush(true);
+            return new FasterSnapshot(this);
+        }
 
         public void Put(byte[] key, byte[] value)
         {
-            if (!_sessionPool.TryGet(out var session))
-                session = _sessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
+            if (SessionPool.TryGet(out var session) == false)
+                session = SessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
             var status = session.Upsert(key, value);
-            _store.TryInitiateHybridLogCheckpoint(out _, CheckpointType.Snapshot, true);
-            _sessionPool.Return(session);
+            if (status.IsPending)
+                session.CompletePending(true);
+            SessionPool.Return(session);
         }
 
         public IEnumerable<(byte[] Key, byte[] Value)> Seek(byte[] keyOrPrefix, SeekDirection direction)
@@ -75,45 +95,44 @@ namespace Neo.Plugins.Storage
 
         public byte[] TryGet(byte[] key)
         {
-            if (!_sessionPool.TryGet(out var session))
-                session = _sessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
+            if (SessionPool.TryGet(out var session) == false)
+                session = SessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
             var (status, output) = session.Read(key);
             byte[] value = null;
-            if (status.IsPending)
+            if (status.IsPending && session.CompletePendingWithOutputs(out var iter, true, true))
             {
-                session.CompletePendingWithOutputs(out var iter, true);
-                while (iter.Next())
+                using (iter)
                 {
-                    if (iter.Current.Status.Found)
+                    if (iter.Next())
                         value = iter.Current.Output;
                 }
-                iter.Dispose();
             }
             else if (status.Found)
                 value = output;
-            _sessionPool.Return(session);
+            SessionPool.Return(session);
             return value;
         }
 
         internal IEnumerable<(byte[] key, byte[] value)> SeekKeyValuesPairs(byte[] keyOrPrefix, ByteArrayComparer comparer)
         {
-            if (!_sessionPool.TryGet(out var session))
-                session = _sessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
-            using var it = session.Iterate(_store.Log.TailAddress);
-            while (it.GetNext(out _))
+            if (SessionPool.TryGet(out var session) == false)
+                session = SessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
+            using (var it = session.Iterate(_store.Log.TailAddress))
             {
-                var keyArray = it.GetKey();
-                var valueArray = it.GetValue();
-                if (keyOrPrefix?.Length > 0)
+                while (it.GetNext(out _))
                 {
-                    if (comparer.Compare(keyArray, keyOrPrefix) >= 0)
+                    var keyArray = it.GetKey();
+                    var valueArray = it.GetValue();
+                    if (keyOrPrefix?.Length > 0)
+                    {
+                        if (comparer.Compare(keyArray, keyOrPrefix) >= 0)
+                            yield return (keyArray, valueArray);
+                    }
+                    else
                         yield return (keyArray, valueArray);
                 }
-                else
-                    yield return (keyArray, valueArray);
             }
-            it.Dispose();
-            _sessionPool.Return(session);
+            SessionPool.Return(session);
         }
     }
 }

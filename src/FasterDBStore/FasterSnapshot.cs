@@ -1,4 +1,3 @@
-using Akka.Actor;
 using FASTER.core;
 using Neo.Persistence;
 using System;
@@ -11,10 +10,10 @@ namespace Neo.Plugins.Storage
         readonly AsyncPool<ClientSession<byte[], byte[], byte[], byte[], Empty, ByteArrayFunctions>> _sessionPool;
         private readonly FasterKVSettings<byte[], byte[]> _settings;
         private readonly FasterKV<byte[], byte[]> _store;
-        private readonly IStore _db;
+        private readonly FasterStore _db;
 
         public FasterSnapshot(
-            IStore store)
+            FasterStore store)
         {
             _db = store;
             _settings = new(null);

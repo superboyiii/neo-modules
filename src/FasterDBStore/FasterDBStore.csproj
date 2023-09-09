@@ -7,9 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MessagePack" Version="2.5.124" />
     <PackageReference Include="Microsoft.FASTER.Core" Version="2.6.0" />
-    <PackageReference Include="xunit.assert" Version="2.5.0" />
   </ItemGroup>
 
 </Project>
