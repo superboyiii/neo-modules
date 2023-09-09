@@ -46,6 +46,7 @@ namespace Neo.Plugins.Storage.Tests
 
             TestStorage(plugin.GetStore(path_leveldb));
 
+            TestMultSnapshot(plugin.GetStore(path_leveldb));
             // Test with different storages
 
             TestPersistenceWrite(plugin.GetStore(path_leveldb));
@@ -81,6 +82,7 @@ namespace Neo.Plugins.Storage.Tests
             TestStorage(plugin.GetStore(path_fasterdb));
 
             TestSnapshot(plugin.GetStore(path_fasterdb));
+            TestMultSnapshot(plugin.GetStore(path_fasterdb));
 
             // Test with different storages
 
@@ -167,10 +169,62 @@ namespace Neo.Plugins.Storage.Tests
             }
         }
 
-        /// <summary>
-        /// Test Put/Delete/TryGet/Seek
-        /// </summary>
-        /// <param name="store">Store</param>
+        private void TestMultSnapshot(IStore store)
+        {
+            using (store)
+            {
+                using var snapshot1 = store.GetSnapshot();
+                using var snapshot2 = store.GetSnapshot();
+
+                snapshot1.Put(new byte[] { 0x01, 0x00, 0x00 }, new byte[] { 0x00 });
+                snapshot1.Put(new byte[] { 0x01, 0x00, 0x01 }, new byte[] { 0x01 });
+                snapshot1.Put(new byte[] { 0x01, 0x00, 0x02 }, new byte[] { 0x02 });
+                snapshot1.Put(new byte[] { 0x01, 0x00, 0x03 }, new byte[] { 0x03 });
+                snapshot1.Put(new byte[] { 0x01, 0x00, 0x04 }, new byte[] { 0x04 });
+
+                snapshot2.Put(new byte[] { 0x02, 0x00, 0x00 }, new byte[] { 0x00 });
+                snapshot2.Put(new byte[] { 0x02, 0x00, 0x01 }, new byte[] { 0x01 });
+                snapshot2.Put(new byte[] { 0x02, 0x00, 0x02 }, new byte[] { 0x02 });
+
+                snapshot2.Commit();
+
+                // Write later
+                snapshot2.Put(new byte[] { 0x02, 0x00, 0x03 }, new byte[] { 0x03 });
+                snapshot2.Put(new byte[] { 0x02, 0x00, 0x04 }, new byte[] { 0x04 });
+
+                var entries = store.Seek(new byte[] { 0x02, 0x00, 0x00 }, SeekDirection.Forward).ToArray();
+                Assert.AreEqual(3, entries.Length);
+                CollectionAssert.AreEqual(new byte[] { 0x02, 0x00, 0x00 }, entries[0].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x00 }, entries[0].Value);
+                CollectionAssert.AreEqual(new byte[] { 0x02, 0x00, 0x01 }, entries[1].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x01 }, entries[1].Value);
+                CollectionAssert.AreEqual(new byte[] { 0x02, 0x00, 0x02 }, entries[2].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x02 }, entries[2].Value);
+
+                snapshot1.Commit();
+
+                entries = store.Seek(new byte[] { 0x01, 0x00, 0x00 }, SeekDirection.Forward).ToArray();
+                Assert.AreEqual(8, entries.Length);
+                CollectionAssert.AreEqual(new byte[] { 0x01, 0x00, 0x00 }, entries[0].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x00 }, entries[0].Value);
+                CollectionAssert.AreEqual(new byte[] { 0x01, 0x00, 0x01 }, entries[1].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x01 }, entries[1].Value);
+                CollectionAssert.AreEqual(new byte[] { 0x01, 0x00, 0x02 }, entries[2].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x02 }, entries[2].Value);
+
+                snapshot2.Commit();
+
+                entries = store.Seek(new byte[] { 0x02, 0x00, 0x00 }, SeekDirection.Forward).ToArray();
+                Assert.AreEqual(5, entries.Length);
+                CollectionAssert.AreEqual(new byte[] { 0x02, 0x00, 0x00 }, entries[0].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x00 }, entries[0].Value);
+                CollectionAssert.AreEqual(new byte[] { 0x02, 0x00, 0x01 }, entries[1].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x01 }, entries[1].Value);
+                CollectionAssert.AreEqual(new byte[] { 0x02, 0x00, 0x02 }, entries[2].Key);
+                CollectionAssert.AreEqual(new byte[] { 0x02 }, entries[2].Value);
+            }
+        }
+
         private void TestSnapshot(IStore store)
         {
             using (var snapshot = store.GetSnapshot())

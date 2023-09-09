@@ -26,6 +26,7 @@ namespace Neo.Plugins.Storage
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int CompareInternal(byte[] x, byte[] y)
         {
+            if (x == null | y == null) return 0;
             int length = Math.Min(x.Length, y.Length);
             for (int i = 0; i < length; i++)
             {
