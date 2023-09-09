@@ -1,5 +1,6 @@
 using FASTER.core;
 using System;
+using System.Buffers;
 
 namespace Neo.Plugins.Storage
 {

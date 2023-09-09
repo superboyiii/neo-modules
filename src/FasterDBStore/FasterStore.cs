@@ -9,37 +9,34 @@ namespace Neo.Plugins.Storage
 {
     public class FasterStore : IStore
     {
-        private readonly ClientSession<byte[], byte[], byte[], byte[], Empty, ByteArrayFunctions> _session;
+        readonly AsyncPool<ClientSession<byte[], byte[], byte[], byte[], Empty, ByteArrayFunctions>> _sessionPool;
         private readonly FasterKVSettings<byte[], byte[]> _settings;
         private readonly FasterKV<byte[], byte[]> _store;
 
+        public string StorePath { get; }
+
         public FasterStore(string path)
         {
+            StorePath = path;
             _settings = new(Path.GetFullPath(path))
             {
                 TryRecoverLatest = true,
-                ReadCacheEnabled = false,
-                PageSize = 512, // Keep memory as small as we can, so it writes to log on disk.
-                MemorySize = 512,// Keep memory as small as we can, so it writes to log on disk.
             };
             _store = new(_settings);
-            _session = _store.For(new ByteArrayFunctions()).NewSession<ByteArrayFunctions>();
-            try
-            {
-                _store.Recover();
-            }
-            catch { }
+            _sessionPool = new AsyncPool<ClientSession<byte[], byte[], byte[], byte[], Empty, ByteArrayFunctions>>(
+                    _settings.LogDevice.ThrottleLimit,
+                    () => _store.For(new ByteArrayFunctions()).NewSession<ByteArrayFunctions>());
         }
 
         public void Dispose()
         {
-            _session.CompletePending(true);
             _store.TakeFullCheckpointAsync(CheckpointType.Snapshot).AsTask().GetAwaiter().GetResult();
             _store.CompleteCheckpointAsync().AsTask().GetAwaiter().GetResult();
             _store.Log.DisposeFromMemory();
             _store.Log.FlushAndEvict(true);
             _store.Dispose();
             _settings.Dispose();
+            _sessionPool.Dispose();
             GC.SuppressFinalize(this);
         }
 
@@ -50,10 +47,11 @@ namespace Neo.Plugins.Storage
 
         public void Delete(byte[] key)
         {
-            using var session = _store.For(new ByteArrayFunctions()).NewSession<ByteArrayFunctions>();
+            if (!_sessionPool.TryGet(out var session))
+                session = _sessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
             var status = session.Delete(key);
-            if (status.IsPending)
-                session.CompletePending(true);
+            _store.TryInitiateHybridLogCheckpoint(out _, CheckpointType.Snapshot, true);
+            _sessionPool.Return(session);
         }
 
         public ISnapshot GetSnapshot() =>
@@ -61,10 +59,11 @@ namespace Neo.Plugins.Storage
 
         public void Put(byte[] key, byte[] value)
         {
-            using var session = _store.For(new ByteArrayFunctions()).NewSession<ByteArrayFunctions>();
+            if (!_sessionPool.TryGet(out var session))
+                session = _sessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
             var status = session.Upsert(key, value);
-            if (status.IsPending)
-                session.CompletePending(false);
+            _store.TryInitiateHybridLogCheckpoint(out _, CheckpointType.Snapshot, true);
+            _sessionPool.Return(session);
         }
 
         public IEnumerable<(byte[] Key, byte[] Value)> Seek(byte[] keyOrPrefix, SeekDirection direction)
@@ -76,25 +75,30 @@ namespace Neo.Plugins.Storage
 
         public byte[] TryGet(byte[] key)
         {
-            using var session = _store.For(new ByteArrayFunctions()).NewSession<ByteArrayFunctions>();
+            if (!_sessionPool.TryGet(out var session))
+                session = _sessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
             var (status, output) = session.Read(key);
+            byte[] value = null;
             if (status.IsPending)
             {
                 session.CompletePendingWithOutputs(out var iter, true);
                 while (iter.Next())
                 {
                     if (iter.Current.Status.Found)
-                        return iter.Current.Output;
+                        value = iter.Current.Output;
                 }
+                iter.Dispose();
             }
             else if (status.Found)
-                return output;
-            return null;
+                value = output;
+            _sessionPool.Return(session);
+            return value;
         }
 
         internal IEnumerable<(byte[] key, byte[] value)> SeekKeyValuesPairs(byte[] keyOrPrefix, ByteArrayComparer comparer)
         {
-            using var session = _store.For(new ByteArrayFunctions()).NewSession<ByteArrayFunctions>();
+            if (!_sessionPool.TryGet(out var session))
+                session = _sessionPool.GetAsync().AsTask().GetAwaiter().GetResult();
             using var it = session.Iterate(_store.Log.TailAddress);
             while (it.GetNext(out _))
             {
@@ -108,6 +112,8 @@ namespace Neo.Plugins.Storage
                 else
                     yield return (keyArray, valueArray);
             }
+            it.Dispose();
+            _sessionPool.Return(session);
         }
     }
 }
