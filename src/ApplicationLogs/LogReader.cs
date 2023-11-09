@@ -10,17 +10,17 @@
 
 using ApplicationLogs.Store;
 using ApplicationLogs.Store.Models;
+using Neo.ConsoleService;
 using Neo.IO;
 using Neo.Json;
 using Neo.Ledger;
 using Neo.Network.P2P.Payloads;
 using Neo.Persistence;
 using Neo.SmartContract;
-using Neo.VM;
-using static System.IO.Path;
-using Neo.ConsoleService;
 using Neo.SmartContract.Native;
+using Neo.VM;
 using System.Numerics;
+using static System.IO.Path;
 
 namespace Neo.Plugins
 {
@@ -63,7 +63,8 @@ namespace Neo.Plugins
 
         protected override void OnSystemLoaded(NeoSystem system)
         {
-            if (system.Settings.Network != Settings.Default.Network) return;
+            if (system.Settings.Network != Settings.Default.Network)
+                return;
             string path = string.Format(Settings.Default.Path, Settings.Default.Network.ToString("X8"));
             var store = system.LoadStore(GetFullPath(path));
             _neostore = new NeoStore(store);
@@ -78,7 +79,8 @@ namespace Neo.Plugins
         [RpcMethod]
         public JToken GetNotificationLog(JArray _params)
         {
-            if (_params == null || _params.Count == 0) throw new RpcException(-32602, "Invalid params");
+            if (_params == null || _params.Count == 0)
+                throw new RpcException(-32602, "Invalid params");
             if (UInt256.TryParse(_params[0].AsString(), out var hash))
             {
                 var eventNamme = string.Empty;
@@ -126,7 +128,8 @@ namespace Neo.Plugins
         [RpcMethod]
         public JToken GetApplicationLog(JArray _params)
         {
-            if (_params == null || _params.Count == 0) throw new RpcException(-32602, "Invalid params");
+            if (_params == null || _params.Count == 0)
+                throw new RpcException(-32602, "Invalid params");
             if (UInt256.TryParse(_params[0].AsString(), out var hash))
             {
                 var raw = BlockToJObject(hash);
@@ -194,6 +197,18 @@ namespace Neo.Plugins
         [ConsoleCommand("log contract", Category = "ApplicationLog Commands")]
         private void OnGetContractCommand(UInt160 scripthash, uint page = 1, uint pageSize = 1, string eventName = null)
         {
+            if (page == 0)
+            {
+                ConsoleHelper.Error("Page is invalid. Pick a number 1 and above.");
+                return;
+            }
+
+            if (pageSize == 0)
+            {
+                ConsoleHelper.Error("PageSize is invalid. Pick a number between 1 and 10.");
+                return;
+            }
+
             var txContract = string.IsNullOrEmpty(eventName) ?
                 _neostore.GetContractLog(scripthash, TriggerType.Application, page, pageSize) :
                 _neostore.GetContractLog(scripthash, TriggerType.Application, eventName, page, pageSize);
@@ -211,17 +226,21 @@ namespace Neo.Plugins
 
         private void OnCommitting(NeoSystem system, Block block, DataCache snapshot, IReadOnlyList<Blockchain.ApplicationExecuted> applicationExecutedList)
         {
-            if (system.Settings.Network != Settings.Default.Network) return;
+            if (system.Settings.Network != Settings.Default.Network)
+                return;
 
-            if (_neostore is null) return;
+            if (_neostore is null)
+                return;
             _neostore.StartBlockLogBatch();
             _neostore.PutBlockLog(block, applicationExecutedList);
         }
 
         private void OnCommitted(NeoSystem system, Block block)
         {
-            if (system.Settings.Network != Settings.Default.Network) return;
-            if (_neostore is null) return;
+            if (system.Settings.Network != Settings.Default.Network)
+                return;
+            if (_neostore is null)
+                return;
             _neostore.CommitBlockLog();
         }
 
@@ -350,7 +369,8 @@ namespace Neo.Plugins
             var blockOnPersist = _neostore.GetBlockLog(blockHash, TriggerType.OnPersist);
             var blockPostPersist = _neostore.GetBlockLog(blockHash, TriggerType.PostPersist);
 
-            if (blockOnPersist == null && blockPostPersist == null) return null;
+            if (blockOnPersist == null && blockPostPersist == null)
+                return null;
 
             var blockJson = new JObject();
             blockJson["blockhash"] = blockHash.ToString();
