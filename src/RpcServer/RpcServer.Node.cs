@@ -82,7 +82,20 @@ namespace Neo.Plugins
             json["protocol"]["maxtransactionsperblock"] = system.Settings.MaxTransactionsPerBlock;
             json["protocol"]["memorypoolmaxtransactions"] = system.Settings.MemoryPoolMaxTransactions;
             json["protocol"]["initialgasdistribution"] = system.Settings.InitialGasDistribution;
+            json["protocol"]["hardforks"] = new JArray(system.Settings.Hardforks.Select(hf =>
+            {
+                JObject forkJson = new();
+                // Strip "HF_" prefix.
+                forkJson["name"] = StripPrefix(hf.Key.ToString(), "HF_");
+                forkJson["blockheight"] = hf.Value;
+                return forkJson;
+            }));
             return json;
+        }
+
+        private static string StripPrefix(string s, string prefix)
+        {
+            return s.StartsWith(prefix) ? s.Substring(prefix.Length) : s;
         }
 
         [RpcMethod]
