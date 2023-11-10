@@ -83,11 +83,11 @@ namespace Neo.Plugins
                 throw new RpcException(-32602, "Invalid params");
             if (UInt256.TryParse(_params[0].AsString(), out var hash))
             {
-                var eventNamme = string.Empty;
+                var eventName = string.Empty;
                 var trigger = TriggerType.All;
 
                 if (_params.Count >= 2)
-                    eventNamme = _params[1].AsString();
+                    eventName = _params[1].AsString();
                 if (_params.Count == 3)
                     Enum.TryParse(_params[2].AsString(), true, out trigger);
 
@@ -96,25 +96,25 @@ namespace Neo.Plugins
 
                 if (trigger.HasFlag(TriggerType.OnPersist) || trigger == TriggerType.OnPersist)
                 {
-                    model = string.IsNullOrEmpty(eventNamme) ?
+                    model = string.IsNullOrEmpty(eventName) ?
                         _neostore.GetBlockLog(hash, TriggerType.OnPersist) :
-                        _neostore.GetBlockLog(hash, TriggerType.OnPersist, eventNamme);
+                        _neostore.GetBlockLog(hash, TriggerType.OnPersist, eventName);
                     if (model != null)
                         chainEvents.AddRange(model.Notifications.Select(EventModelToJObject));
                 }
                 if (trigger.HasFlag(TriggerType.PostPersist) || trigger == TriggerType.PostPersist)
                 {
-                    model = string.IsNullOrEmpty(eventNamme) ?
+                    model = string.IsNullOrEmpty(eventName) ?
                         _neostore.GetBlockLog(hash, TriggerType.PostPersist) :
-                        _neostore.GetBlockLog(hash, TriggerType.PostPersist, eventNamme);
+                        _neostore.GetBlockLog(hash, TriggerType.PostPersist, eventName);
                     if (model != null)
                         chainEvents.AddRange(model.Notifications.Select(EventModelToJObject));
                 }
                 if (trigger.HasFlag(TriggerType.Application) || trigger == TriggerType.Application)
                 {
-                    model = string.IsNullOrEmpty(eventNamme) ?
+                    model = string.IsNullOrEmpty(eventName) ?
                         _neostore.GetTransactionLog(hash) :
-                        _neostore.GetTransactionLog(hash, eventNamme);
+                        _neostore.GetTransactionLog(hash, eventName);
                     if (model != null)
                         chainEvents.AddRange(model.Notifications.Select(EventModelToJObject));
                 }
