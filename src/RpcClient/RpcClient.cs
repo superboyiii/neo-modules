@@ -113,7 +113,8 @@ namespace Neo.Network.RPC
 
         public RpcResponse Send(RpcRequest request, bool throwOnError = true)
         {
-            if (disposedValue) throw new ObjectDisposedException(nameof(RpcClient));
+            if (disposedValue)
+                throw new ObjectDisposedException(nameof(RpcClient));
 
             using var requestMsg = AsHttpRequest(request);
             using var responseMsg = httpClient.Send(requestMsg);
@@ -124,7 +125,8 @@ namespace Neo.Network.RPC
 
         public async Task<RpcResponse> SendAsync(RpcRequest request, bool throwOnError = true)
         {
-            if (disposedValue) throw new ObjectDisposedException(nameof(RpcClient));
+            if (disposedValue)
+                throw new ObjectDisposedException(nameof(RpcClient));
 
             using var requestMsg = AsHttpRequest(request);
             using var responseMsg = await httpClient.SendAsync(requestMsg).ConfigureAwait(false);
@@ -472,7 +474,8 @@ namespace Neo.Network.RPC
                 {
                     yield return jObject;
                 }
-                if (array.Count < count) break;
+                if (array.Count < count)
+                    break;
             }
         }
 
@@ -658,54 +661,6 @@ namespace Neo.Network.RPC
         #endregion Wallet
 
         #region Plugins
-
-        /// <summary>
-        /// Returns an array of contract notification log based on the specified hash.
-        /// This method is provided by the plugin ApplicationLogs.
-        /// </summary>
-        /// <param name="hash">block or transaction</param>
-        public async Task<RpcNotificationLog[]> GetNotificationLogAsync(UInt256 hash)
-        {
-            var result = await RpcSendAsync(GetRpcName(), hash.ToString()).ConfigureAwait(false);
-            return ((JArray)result).Select(s => RpcNotificationLog.FromJson((JObject)s)).ToArray();
-        }
-
-        /// <summary>
-        /// Returns an array of contract notification log based on the specified hash.
-        /// This method is provided by the plugin ApplicationLogs.
-        /// </summary>
-        /// <param name="hash">block or transaction</param>
-        /// <param name="trigger">Note: Blocks get only get OnPersist, PostPersist and transaction get only Application. TriggerType.All is allow for all three.</param>
-        public async Task<RpcNotificationLog[]> GetNotificationLogAsync(UInt256 hash, TriggerType trigger)
-        {
-            var result = await RpcSendAsync(GetRpcName(), hash.ToString(), "", trigger).ConfigureAwait(false);
-            return ((JArray)result).Select(s => RpcNotificationLog.FromJson((JObject)s)).ToArray();
-        }
-
-        /// <summary>
-        /// Returns an array of contract notification log based on the specified hash.
-        /// This method is provided by the plugin ApplicationLogs.
-        /// </summary>
-        /// <param name="hash">block or transaction</param>
-        /// <param name="eventName">The name of the event which is case insensitive.</param>
-        public async Task<RpcNotificationLog[]> GetNotificationLogAsync(UInt256 hash, string eventName)
-        {
-            var result = await RpcSendAsync(GetRpcName(), hash.ToString(), eventName).ConfigureAwait(false);
-            return ((JArray)result).Select(s => RpcNotificationLog.FromJson((JObject)s)).ToArray();
-        }
-
-        /// <summary>
-        /// Returns an array of contract notification log based on the specified hash.
-        /// This method is provided by the plugin ApplicationLogs.
-        /// </summary>
-        /// <param name="hash">block or transaction</param>
-        /// <param name="eventName">The name of the event which is case insensitive.</param>
-        /// <param name="trigger">Note: Blocks get only get OnPersist, PostPersist and transaction get only Application. TriggerType.All is allow for all three.</param>
-        public async Task<RpcNotificationLog[]> GetNotificationLogAsync(UInt256 hash, string eventName, TriggerType trigger)
-        {
-            var result = await RpcSendAsync(GetRpcName(), hash.ToString(), eventName, trigger).ConfigureAwait(false);
-            return ((JArray)result).Select(s => RpcNotificationLog.FromJson((JObject)s)).ToArray();
-        }
 
         /// <summary>
         /// Returns the contract log based on the specified txHash. The complete contract logs are stored under the ApplicationLogs directory.
