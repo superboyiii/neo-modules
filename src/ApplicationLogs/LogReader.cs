@@ -161,8 +161,19 @@ namespace Neo.Plugins
         #region Console Commands
 
         [ConsoleCommand("log block", Category = "ApplicationLog Commands")]
-        private void OnGetBlockCommand(UInt256 blockhash, string eventName = null)
+        private void OnGetBlockCommand(string blockHashOrIndex, string eventName = null)
         {
+            UInt256 blockhash;
+            if (uint.TryParse(blockHashOrIndex, out var blockIndex))
+            {
+                blockhash = NativeContract.Ledger.GetBlockHash(_neosystem.StoreView, blockIndex);
+            }
+            else if (UInt256.TryParse(blockHashOrIndex, out blockhash) == false)
+            {
+                ConsoleHelper.Error("Invalid block hash or index.");
+                return;
+            }
+
             var blockOnPersist = string.IsNullOrEmpty(eventName) ?
                 _neostore.GetBlockLog(blockhash, TriggerType.OnPersist) :
                 _neostore.GetBlockLog(blockhash, TriggerType.OnPersist, eventName);
