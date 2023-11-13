@@ -125,8 +125,7 @@ namespace Neo.Network.RPC
 
         public async Task<RpcResponse> SendAsync(RpcRequest request, bool throwOnError = true)
         {
-            if (disposedValue)
-                throw new ObjectDisposedException(nameof(RpcClient));
+            if (disposedValue) throw new ObjectDisposedException(nameof(RpcClient));
 
             using var requestMsg = AsHttpRequest(request);
             using var responseMsg = await httpClient.SendAsync(requestMsg).ConfigureAwait(false);
@@ -474,8 +473,7 @@ namespace Neo.Network.RPC
                 {
                     yield return jObject;
                 }
-                if (array.Count < count)
-                    break;
+                if (array.Count < count) break;
             }
         }
 
