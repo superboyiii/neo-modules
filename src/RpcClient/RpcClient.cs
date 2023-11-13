@@ -113,8 +113,7 @@ namespace Neo.Network.RPC
 
         public RpcResponse Send(RpcRequest request, bool throwOnError = true)
         {
-            if (disposedValue)
-                throw new ObjectDisposedException(nameof(RpcClient));
+            if (disposedValue) throw new ObjectDisposedException(nameof(RpcClient));
 
             using var requestMsg = AsHttpRequest(request);
             using var responseMsg = httpClient.Send(requestMsg);
