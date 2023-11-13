@@ -201,6 +201,16 @@ namespace Neo.Plugins
                 return;
             _neostore.StartBlockLogBatch();
             _neostore.PutBlockLog(block, applicationExecutedList);
+            if (Settings.Default.Debug)
+            {
+                foreach (var appEng in applicationExecutedList.Where(w => w.Transaction != null))
+                {
+                    var logs = _logEvents.Where(w => w.ScriptContainer.Hash == appEng.Transaction.Hash).ToList();
+                    if (logs.Any())
+                        _neostore.PutTransactionEngineLogState(appEng.Transaction.Hash, logs);
+                }
+                _logEvents.Clear();
+            }
         }
 
         private void OnCommitted(NeoSystem system, Block block)
@@ -209,13 +219,7 @@ namespace Neo.Plugins
                 return;
             if (_neostore is null)
                 return;
-            if (Settings.Default.Debug)
-            {
-                foreach (var tx in block.Transactions)
-                    _neostore.PutTransactionEngineLogState(tx.Hash, _logEvents);
-            }
             _neostore.CommitBlockLog();
-            _logEvents.Clear();
         }
 
         private void OnApplicationEngineLog(object sender, LogEventArgs e)
