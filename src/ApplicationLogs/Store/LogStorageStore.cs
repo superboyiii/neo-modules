@@ -13,6 +13,7 @@ using Neo;
 using Neo.IO;
 using Neo.Persistence;
 using Neo.Plugins;
+using Neo.Plugins.Store.States;
 using Neo.SmartContract;
 using Neo.VM;
 using Neo.VM.Types;
@@ -28,6 +29,8 @@ namespace ApplicationLogs.Store
         private static readonly int Prefix_Execution_Block_Trigger_Size = Prefix_Size + UInt256.Length;
 
         private static readonly int Prefix_Id = 0x414c4f47;                 // Magic Code: (ALOG);
+        private static readonly byte Prefix_Engine = 0x18;                  // Engine_GUID -> ScriptHash, Message
+        private static readonly byte Prefix_Engine_Transaction = 0x19;      // TxHash -> Engine_GUID_List
         private static readonly byte Prefix_Block = 0x20;                   // BlockHash, Trigger -> NotifyLog_GUID_List
         private static readonly byte Prefix_Notify = 0x21;                  // NotifyLog_GUID -> ScriptHash, EventName, StackItem_GUID_List
         private static readonly byte Prefix_Contract = 0x22;                // ScriptHash, TimeStamp, EventIterIndex -> txHash, Trigger, NotifyLog_GUID
@@ -65,6 +68,24 @@ namespace ApplicationLogs.Store
         #endregion
 
         #region Put
+
+        public Guid PutEngineState(EngineLogState state)
+        {
+            var id = Guid.NewGuid();
+            var key = new KeyBuilder(Prefix_Id, Prefix_Engine)
+                .Add(id.ToByteArray())
+                .ToArray();
+            _snapshot.Put(key, state.ToArray());
+            return id;
+        }
+
+        public void PutTransactionEngineState(UInt256 hash, TransactionEngineLogState state)
+        {
+            var key = new KeyBuilder(Prefix_Id, Prefix_Engine_Transaction)
+                .Add(hash)
+                .ToArray();
+            _snapshot.Put(key, state.ToArray());
+        }
 
         public void PutBlockState(UInt256 hash, TriggerType trigger, BlockLogState state)
         {
@@ -259,6 +280,26 @@ namespace ApplicationLogs.Store
         #endregion
 
         #region TryGet
+
+        public bool TryGetEngineState(Guid engineStateId, out EngineLogState state)
+        {
+            var key = new KeyBuilder(Prefix_Id, Prefix_Engine)
+                .Add(engineStateId.ToByteArray())
+                .ToArray();
+            var data = _snapshot.TryGet(key);
+            state = data?.AsSerializable<EngineLogState>();
+            return data != null && data.Length > 0;
+        }
+
+        public bool TryGetTransactionEngineState(UInt256 hash, out TransactionEngineLogState state)
+        {
+            var key = new KeyBuilder(Prefix_Id, Prefix_Engine_Transaction)
+                .Add(hash)
+                .ToArray();
+            var data = _snapshot.TryGet(key);
+            state = data?.AsSerializable<TransactionEngineLogState>();
+            return data != null && data.Length > 0;
+        }
 
         public bool TryGetBlockState(UInt256 hash, TriggerType trigger, out BlockLogState state)
         {

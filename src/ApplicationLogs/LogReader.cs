@@ -30,6 +30,7 @@ namespace Neo.Plugins
 
         private NeoStore _neostore;
         private NeoSystem _neosystem;
+        private List<LogEventArgs> _logEvents;
 
         #endregion
 
@@ -40,8 +41,11 @@ namespace Neo.Plugins
 
         public LogReader()
         {
+            _logEvents = new();
             Blockchain.Committing += OnCommitting;
             Blockchain.Committed += OnCommitted;
+            if (Settings.Default.Debug)
+                ApplicationEngine.Log += OnApplicationEngineLog;
         }
 
         #endregion
@@ -52,7 +56,8 @@ namespace Neo.Plugins
         {
             Blockchain.Committing -= OnCommitting;
             Blockchain.Committed -= OnCommitted;
-            _neostore?.Dispose();
+            if (Settings.Default.Debug)
+                ApplicationEngine.Log -= OnApplicationEngineLog;
             GC.SuppressFinalize(this);
         }
 
@@ -133,7 +138,7 @@ namespace Neo.Plugins
                 _neostore.GetBlockLog(blockhash, TriggerType.PostPersist, eventName);
 
             if (blockOnPersist == null && blockOnPersist == null)
-                ConsoleHelper.Error($"No notify logs.");
+                ConsoleHelper.Error($"No logs.");
             if (blockOnPersist != null)
                 PrintExecutionToConsole(blockOnPersist);
             if (blockPostPersist != null)
@@ -151,7 +156,7 @@ namespace Neo.Plugins
                 _neostore.GetTransactionLog(txhash, eventName);
 
             if (txApplication == null)
-                ConsoleHelper.Error($"No notify logs.");
+                ConsoleHelper.Error($"No logs.");
             else
                 PrintExecutionToConsole(txApplication);
         }
@@ -176,7 +181,7 @@ namespace Neo.Plugins
                 _neostore.GetContractLog(scripthash, TriggerType.Application, eventName, page, pageSize);
 
             if (txContract.Count == 0)
-                ConsoleHelper.Error($"No notify logs.");
+                ConsoleHelper.Error($"No logs.");
             else
                 PrintEventModelToConsole(txContract);
         }
@@ -203,7 +208,27 @@ namespace Neo.Plugins
                 return;
             if (_neostore is null)
                 return;
+            if (Settings.Default.Debug)
+            {
+                foreach (var tx in block.Transactions)
+                    _neostore.PutTransactionEngineLogState(tx.Hash, _logEvents);
+            }
             _neostore.CommitBlockLog();
+            _logEvents.Clear();
+        }
+
+        private void OnApplicationEngineLog(object sender, LogEventArgs e)
+        {
+            if (_neosystem.Settings.Network != Settings.Default.Network)
+                return;
+
+            if (Settings.Default.Debug == false)
+                return;
+
+            if (e.ScriptContainer == null)
+                return;
+
+            _logEvents.Add(e);
         }
 
         #endregion
@@ -228,7 +253,7 @@ namespace Neo.Plugins
                     ConsoleHelper.Info($"  {i}: ", $"{model.Stack[i].ToJson()}");
             }
             if (model.Notifications.Length == 0)
-                ConsoleHelper.Info("Notifications:", "[]");
+                ConsoleHelper.Info("Notifications: ", "[]");
             else
             {
                 ConsoleHelper.Info("Notifications:");
@@ -236,10 +261,25 @@ namespace Neo.Plugins
                 {
                     ConsoleHelper.Info();
                     ConsoleHelper.Info("  ScriptHash: ", $"{notifyItem.ScriptHash}");
-                    ConsoleHelper.Info("  Event Name:  ", $"{notifyItem.EventName}");
+                    ConsoleHelper.Info("  Event Name: ", $"{notifyItem.EventName}");
                     ConsoleHelper.Info("  State Parameters:");
                     for (int i = 0; i < notifyItem.State.Length; i++)
                         ConsoleHelper.Info($"    {GetMethodParameterName(notifyItem.ScriptHash, notifyItem.EventName, i)}: ", $"{notifyItem.State[i].ToJson()}");
+                }
+            }
+            if (Settings.Default.Debug)
+            {
+                if (model.Logs.Length == 0)
+                    ConsoleHelper.Info("Logs: ", "[]");
+                else
+                {
+                    ConsoleHelper.Info("Logs:");
+                    foreach (var logItem in model.Logs)
+                    {
+                        ConsoleHelper.Info();
+                        ConsoleHelper.Info("  ScriptHash: ", $"{logItem.ScriptHash}");
+                        ConsoleHelper.Info("  Message: ", $"{logItem.Message}");
+                    }
                 }
             }
         }
@@ -322,6 +362,17 @@ namespace Neo.Plugins
                 return notification;
             }).ToArray();
 
+            if (Settings.Default.Debug)
+            {
+                trigger["logs"] = appLog.Logs.Select(s =>
+                {
+                    var log = new JObject();
+                    log["contract"] = s.ScriptHash.ToString();
+                    log["message"] = s.Message;
+                    return log;
+                }).ToArray();
+            }
+
             raw["executions"] = new[] { trigger };
             return raw;
         }
@@ -380,6 +431,17 @@ namespace Neo.Plugins
                 }
                 return notification;
             }).ToArray();
+
+            if (Settings.Default.Debug)
+            {
+                trigger["logs"] = blockExecutionModel.Logs.Select(s =>
+                {
+                    var log = new JObject();
+                    log["contract"] = s.ScriptHash.ToString();
+                    log["message"] = s.Message;
+                    return log;
+                }).ToArray();
+            }
 
             return trigger;
         }

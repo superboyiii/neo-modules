@@ -49,7 +49,7 @@ namespace ApplicationLogs.Store.States
         public virtual void Serialize(BinaryWriter writer)
         {
             ScriptHash.Serialize(writer);
-            writer.WriteVarString(EventName);
+            writer.WriteVarString(EventName ?? string.Empty);
 
             writer.Write((uint)StackItemIds.Length);
             for (int i = 0; i < StackItemIds.Length; i++)

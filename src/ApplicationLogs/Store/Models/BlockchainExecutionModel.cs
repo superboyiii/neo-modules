@@ -9,6 +9,7 @@
 // modifications are permitted.
 
 using ApplicationLogs.Store.States;
+using Neo.Plugins.Store.Models;
 using Neo.SmartContract;
 using Neo.VM;
 using Neo.VM.Types;
@@ -23,6 +24,7 @@ namespace ApplicationLogs.Store.Models
         public long GasConsumed { get; set; } = 0L;
         public StackItem[] Stack { get; set; } = System.Array.Empty<StackItem>();
         public BlockchainEventModel[] Notifications { get; set; } = System.Array.Empty<BlockchainEventModel>();
+        public ApplicationEngineLogModel[] Logs { get; set; } = System.Array.Empty<ApplicationEngineLogModel>();
 
         public static BlockchainExecutionModel Create(TriggerType trigger, ExecutionLogState executionLogState, StackItem[] stack) =>
             new()

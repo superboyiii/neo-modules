@@ -14,6 +14,8 @@ using Neo;
 using Neo.Ledger;
 using Neo.Network.P2P.Payloads;
 using Neo.Persistence;
+using Neo.Plugins.Store.Models;
+using Neo.Plugins.Store.States;
 using Neo.SmartContract;
 using Neo.VM.Types;
 
@@ -94,6 +96,19 @@ namespace ApplicationLogs.Store
             foreach (var contractState in lss.FindContractState(scriptHash, triggerType, eventName, page, pageSize))
                 lstModels.Add((BlockchainEventModel.Create(contractState, CreateStackItemArray(lss, contractState.StackItemIds)), contractState.TransactionHash));
             return lstModels;
+        }
+
+        #endregion
+
+        #region Engine
+
+        public void PutTransactionEngineLogState(UInt256 hash, IReadOnlyList<LogEventArgs> logs)
+        {
+            using var lss = new LogStorageStore(_blocklogsnapshot);
+            var ids = new List<Guid>();
+            foreach (var log in logs)
+                ids.Add(lss.PutEngineState(EngineLogState.Create(log.ScriptHash, log.Message)));
+            lss.PutTransactionEngineState(hash, TransactionEngineLogState.Create(ids.ToArray()));
         }
 
         #endregion
@@ -184,6 +199,17 @@ namespace ApplicationLogs.Store
                             lstOfEventModel.Add(BlockchainEventModel.Create(notifyLogState, CreateStackItemArray(lss, notifyLogState.StackItemIds)));
                     }
                     model.Notifications = lstOfEventModel.ToArray();
+
+                    if (lss.TryGetTransactionEngineState(hash, out var transactionEngineLogState))
+                    {
+                        var lstOfLogs = new List<ApplicationEngineLogModel>();
+                        foreach (var logItem in transactionEngineLogState.LogIds)
+                        {
+                            if (lss.TryGetEngineState(logItem, out var engineLogState))
+                                lstOfLogs.Add(ApplicationEngineLogModel.Create(engineLogState));
+                        }
+                        model.Logs = lstOfLogs.ToArray();
+                    }
                 }
                 return model;
             }
@@ -209,6 +235,17 @@ namespace ApplicationLogs.Store
                         }
                     }
                     model.Notifications = lstOfEventModel.ToArray();
+
+                    if (lss.TryGetTransactionEngineState(hash, out var transactionEngineLogState))
+                    {
+                        var lstOfLogs = new List<ApplicationEngineLogModel>();
+                        foreach (var logItem in transactionEngineLogState.LogIds)
+                        {
+                            if (lss.TryGetEngineState(logItem, out var engineLogState))
+                                lstOfLogs.Add(ApplicationEngineLogModel.Create(engineLogState));
+                        }
+                        model.Logs = lstOfLogs.ToArray();
+                    }
                 }
                 return model;
             }
