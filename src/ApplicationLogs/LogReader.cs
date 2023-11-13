@@ -44,8 +44,6 @@ namespace Neo.Plugins
             _logEvents = new();
             Blockchain.Committing += OnCommitting;
             Blockchain.Committed += OnCommitted;
-            if (Settings.Default.Debug)
-                ApplicationEngine.Log += OnApplicationEngineLog;
         }
 
         #endregion
@@ -75,6 +73,9 @@ namespace Neo.Plugins
             _neostore = new NeoStore(store);
             _neosystem = system;
             RpcServerPlugin.RegisterMethods(this, Settings.Default.Network);
+
+            if (Settings.Default.Debug)
+                ApplicationEngine.Log += OnApplicationEngineLog;
         }
 
         #endregion
@@ -219,10 +220,10 @@ namespace Neo.Plugins
 
         private void OnApplicationEngineLog(object sender, LogEventArgs e)
         {
-            if (_neosystem.Settings.Network != Settings.Default.Network)
+            if (Settings.Default.Debug == false)
                 return;
 
-            if (Settings.Default.Debug == false)
+            if (_neosystem.Settings.Network != Settings.Default.Network)
                 return;
 
             if (e.ScriptContainer == null)
