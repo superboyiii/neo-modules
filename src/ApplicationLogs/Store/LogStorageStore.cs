@@ -159,11 +159,11 @@ namespace ApplicationLogs.Store
                 .ToArray();
             try
             {
-                _snapshot.Put(key, BinarySerializer.Serialize(stackItem, (uint)Settings.Default.MaxStackSize));
+                _snapshot.Put(key, BinarySerializer.Serialize(stackItem, ExecutionEngineLimits.Default with { MaxItemSize = (uint)Settings.Default.MaxStackSize }));
             }
             catch (NotSupportedException)
             {
-                _snapshot.Put(key, BinarySerializer.Serialize(StackItem.Null, (uint)Settings.Default.MaxStackSize));
+                _snapshot.Put(key, BinarySerializer.Serialize(StackItem.Null, ExecutionEngineLimits.Default with { MaxItemSize = (uint)Settings.Default.MaxStackSize }));
             }
             return id;
         }
