@@ -1,8 +1,9 @@
-// Copyright (C) 2015-2023 The Neo Project.
+// Copyright (C) 2015-2024 The Neo Project.
 //
-// The Neo.Plugins.TokensTracker is free software distributed under the MIT software license,
-// see the accompanying file LICENSE in the main directory of the
-// project or http://www.opensource.org/licenses/mit-license.php
+// Nep11Tracker.cs file belongs to the neo project and is free
+// software distributed under the MIT software license, see the
+// accompanying file LICENSE in the main directory of the
+// repository or http://www.opensource.org/licenses/mit-license.php
 // for more details.
 //
 // Redistribution and use in source and binary forms with or without
@@ -194,14 +195,13 @@ namespace Neo.Plugins.Trackers.NEP_11
         [RpcMethod]
         public JToken GetNep11Transfers(JArray _params)
         {
-            if (!_shouldTrackHistory) throw new RpcException(-32601, "Method not found");
+            _shouldTrackHistory.True_Or(RpcError.MethodNotFound);
             UInt160 userScriptHash = GetScriptHashFromParam(_params[0].AsString());
             // If start time not present, default to 1 week of history.
             ulong startTime = _params.Count > 1 ? (ulong)_params[1].AsNumber() :
                 (DateTime.UtcNow - TimeSpan.FromDays(7)).ToTimestampMS();
             ulong endTime = _params.Count > 2 ? (ulong)_params[2].AsNumber() : DateTime.UtcNow.ToTimestampMS();
-
-            if (endTime < startTime) throw new RpcException(-32602, "Invalid params");
+            (endTime >= startTime).True_Or(RpcError.InvalidParams);
 
             JObject json = new();
             json["address"] = userScriptHash.ToAddress(_neoSystem.Settings.AddressVersion);

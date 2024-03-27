@@ -6,7 +6,7 @@ on:
   pull_request:
 
 env:
-  DOTNET_VERSION: 7.0.x
+  DOTNET_VERSION: 8.0.x
 
 jobs:
 
@@ -14,9 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
     - name: Setup .NET Core
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     - name: Check format
@@ -25,23 +28,37 @@ jobs:
       run: |
         sudo apt-get --assume-yes install libleveldb-dev libsnappy-dev libc6-dev
         find tests -name *.csproj | xargs -I % dotnet add % package coverlet.msbuild
-        dotnet test tests/Neo.Network.RPC.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage/
-        dotnet test tests/Neo.Plugins.RpcServer.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage/lcov /p:MergeWith=${GITHUB_WORKSPACE}/coverage/coverage.json /p:CoverletOutputFormat=lcov
-        dotnet test tests/Neo.Plugins.Storage.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage/lcov /p:MergeWith=${GITHUB_WORKSPACE}/coverage/coverage.json /p:CoverletOutputFormat=lcov
-        dotnet test tests/Neo.Cryptography.MPTTrie.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage/lcov /p:MergeWith=${GITHUB_WORKSPACE}/coverage/coverage.json /p:CoverletOutputFormat=lcov
-        dotnet test tests/Neo.Plugins.OracleService.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage/lcov /p:MergeWith=${GITHUB_WORKSPACE}/coverage/coverage.json /p:CoverletOutputFormat=lcov
+        EXCLUDED_TESTS="[Neo]*,[Neo.IO]*,[Neo.Json]*,[Neo.VM]*,[Neo.Extensions]*,[Neo.Cryptography.BLS12_381]*"
+        EXPECTED_COVERAGE_FILENAME=coverage.net8.0.json
+        dotnet test tests/Neo.Network.RPC.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage-join/ /p:Exclude=${EXCLUDED_TESTS}
+        dotnet test tests/Neo.Plugins.RpcServer.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage-join/  /p:Exclude=${EXCLUDED_TESTS} /p:MergeWith=${GITHUB_WORKSPACE}/coverage-join/${EXPECTED_COVERAGE_FILENAME}
+        dotnet test tests/Neo.Plugins.Storage.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage-join/  /p:Exclude=${EXCLUDED_TESTS} /p:MergeWith=${GITHUB_WORKSPACE}/coverage-join/${EXPECTED_COVERAGE_FILENAME}
+        dotnet test tests/Neo.Cryptography.MPTTrie.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage-join/ p:Exclude=${EXCLUDED_TESTS} /p:MergeWith=${GITHUB_WORKSPACE}/coverage-join/${EXPECTED_COVERAGE_FILENAME}
+        dotnet test tests/Neo.Plugins.OracleService.Tests /p:CollectCoverage=true /p:CoverletOutput=${GITHUB_WORKSPACE}/coverage/lcov/ /p:Exclude=${EXCLUDED_TESTS} /p:MergeWith=${GITHUB_WORKSPACE}/coverage-join/${EXPECTED_COVERAGE_FILENAME} /p:CoverletOutputFormat=lcov
     - name: Coveralls
-      uses: coverallsapp/github-action@master
+      uses: coverallsapp/github-action@v2.2.3
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
+        format: lcov
+        file: ${GITHUB_WORKSPACE}/coverage/lcov.net8.0.info
 
-  Release:
-    if: github.ref == 'refs/heads/master' && startsWith(github.repository, 'neo-project/')
+  Review:
     needs: Test
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+  Release:
+    needs: Test
+    if: github.ref == 'refs/heads/master' && startsWith(github.repository, 'neo-project/')
+    runs-on: ubuntu-latest
+    steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
     - name: Get version
       id: get_version
       run: |
@@ -54,15 +71,18 @@ jobs:
       if: steps.check_tag.outputs.statusCode == '404'
       id: create_release
       uses: actions/create-release@v1
+
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
+        fetch-depth: 0
+        submodules: recursive
         tag_name: ${{ steps.get_version.outputs.version }}
         release_name: ${{ steps.get_version.outputs.version }}
         prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
     - name: Setup .NET Core
       if: steps.check_tag.outputs.statusCode == '404'
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     - name: Publish to NuGet

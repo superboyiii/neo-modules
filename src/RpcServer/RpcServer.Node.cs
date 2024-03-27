@@ -1,8 +1,9 @@
-// Copyright (C) 2015-2023 The Neo Project.
+// Copyright (C) 2015-2024 The Neo Project.
 //
-// The Neo.Network.RPC is free software distributed under the MIT software license,
-// see the accompanying file LICENSE in the main directory of the
-// project or http://www.opensource.org/licenses/mit-license.php
+// RpcServer.Node.cs file belongs to the neo project and is free
+// software distributed under the MIT software license, see the
+// accompanying file LICENSE in the main directory of the
+// repository or http://www.opensource.org/licenses/mit-license.php
 // for more details.
 //
 // Redistribution and use in source and binary forms with or without
@@ -52,15 +53,59 @@ namespace Neo.Plugins
 
         private static JObject GetRelayResult(VerifyResult reason, UInt256 hash)
         {
-            if (reason == VerifyResult.Succeed)
+
+            switch (reason)
             {
-                var ret = new JObject();
-                ret["hash"] = hash.ToString();
-                return ret;
-            }
-            else
-            {
-                throw new RpcException(-500, reason.ToString());
+                case VerifyResult.Succeed:
+                    {
+                        var ret = new JObject();
+                        ret["hash"] = hash.ToString();
+                        return ret;
+                    }
+                case VerifyResult.AlreadyExists:
+                    {
+                        throw new RpcException(RpcError.AlreadyExists.WithData(reason.ToString()));
+                    }
+                case VerifyResult.AlreadyInPool:
+                    {
+                        throw new RpcException(RpcError.AlreadyInPool.WithData(reason.ToString()));
+                    }
+                case VerifyResult.OutOfMemory:
+                    {
+                        throw new RpcException(RpcError.MempoolCapReached.WithData(reason.ToString()));
+                    }
+                case VerifyResult.InvalidScript:
+                    {
+                        throw new RpcException(RpcError.InvalidScript.WithData(reason.ToString()));
+                    }
+                case VerifyResult.InvalidAttribute:
+                    {
+                        throw new RpcException(RpcError.InvalidAttribute.WithData(reason.ToString()));
+                    }
+                case VerifyResult.InvalidSignature:
+                    {
+                        throw new RpcException(RpcError.InvalidSignature.WithData(reason.ToString()));
+                    }
+                case VerifyResult.OverSize:
+                    {
+                        throw new RpcException(RpcError.InvalidSize.WithData(reason.ToString()));
+                    }
+                case VerifyResult.Expired:
+                    {
+                        throw new RpcException(RpcError.ExpiredTransaction.WithData(reason.ToString()));
+                    }
+                case VerifyResult.InsufficientFunds:
+                    {
+                        throw new RpcException(RpcError.InsufficientFunds.WithData(reason.ToString()));
+                    }
+                case VerifyResult.PolicyFail:
+                    {
+                        throw new RpcException(RpcError.PolicyFailed.WithData(reason.ToString()));
+                    }
+                default:
+                    {
+                        throw new RpcException(RpcError.VerificationFailed.WithData(reason.ToString()));
+                    }
             }
         }
 
@@ -71,17 +116,22 @@ namespace Neo.Plugins
             json["tcpport"] = localNode.ListenerTcpPort;
             json["nonce"] = LocalNode.Nonce;
             json["useragent"] = LocalNode.UserAgent;
-            json["protocol"] = new JObject();
-            json["protocol"]["addressversion"] = system.Settings.AddressVersion;
-            json["protocol"]["network"] = system.Settings.Network;
-            json["protocol"]["validatorscount"] = system.Settings.ValidatorsCount;
-            json["protocol"]["msperblock"] = system.Settings.MillisecondsPerBlock;
-            json["protocol"]["maxtraceableblocks"] = system.Settings.MaxTraceableBlocks;
-            json["protocol"]["maxvaliduntilblockincrement"] = system.Settings.MaxValidUntilBlockIncrement;
-            json["protocol"]["maxtransactionsperblock"] = system.Settings.MaxTransactionsPerBlock;
-            json["protocol"]["memorypoolmaxtransactions"] = system.Settings.MemoryPoolMaxTransactions;
-            json["protocol"]["initialgasdistribution"] = system.Settings.InitialGasDistribution;
-            json["protocol"]["hardforks"] = new JArray(system.Settings.Hardforks.Select(hf =>
+            // rpc settings
+            JObject rpc = new();
+            rpc["maxiteratorresultitems"] = settings.MaxIteratorResultItems;
+            rpc["sessionenabled"] = settings.SessionEnabled;
+            // protocol settings
+            JObject protocol = new();
+            protocol["addressversion"] = system.Settings.AddressVersion;
+            protocol["network"] = system.Settings.Network;
+            protocol["validatorscount"] = system.Settings.ValidatorsCount;
+            protocol["msperblock"] = system.Settings.MillisecondsPerBlock;
+            protocol["maxtraceableblocks"] = system.Settings.MaxTraceableBlocks;
+            protocol["maxvaliduntilblockincrement"] = system.Settings.MaxValidUntilBlockIncrement;
+            protocol["maxtransactionsperblock"] = system.Settings.MaxTransactionsPerBlock;
+            protocol["memorypoolmaxtransactions"] = system.Settings.MemoryPoolMaxTransactions;
+            protocol["initialgasdistribution"] = system.Settings.InitialGasDistribution;
+            protocol["hardforks"] = new JArray(system.Settings.Hardforks.Select(hf =>
             {
                 JObject forkJson = new();
                 // Strip "HF_" prefix.
@@ -89,6 +139,8 @@ namespace Neo.Plugins
                 forkJson["blockheight"] = hf.Value;
                 return forkJson;
             }));
+            json["rpc"] = rpc;
+            json["protocol"] = protocol;
             return json;
         }
 
@@ -100,7 +152,7 @@ namespace Neo.Plugins
         [RpcMethod]
         protected virtual JToken SendRawTransaction(JArray _params)
         {
-            Transaction tx = Convert.FromBase64String(_params[0].AsString()).AsSerializable<Transaction>();
+            Transaction tx = Result.Ok_Or(() => Convert.FromBase64String(_params[0].AsString()).AsSerializable<Transaction>(), RpcError.InvalidParams.WithData($"Invalid Transaction Format: {_params[0]}"));
             RelayResult reason = system.Blockchain.Ask<RelayResult>(tx).Result;
             return GetRelayResult(reason.Result, tx.Hash);
         }
@@ -108,7 +160,7 @@ namespace Neo.Plugins
         [RpcMethod]
         protected virtual JToken SubmitBlock(JArray _params)
         {
-            Block block = Convert.FromBase64String(_params[0].AsString()).AsSerializable<Block>();
+            Block block = Result.Ok_Or(() => Convert.FromBase64String(_params[0].AsString()).AsSerializable<Block>(), RpcError.InvalidParams.WithData($"Invalid Block Format: {_params[0]}"));
             RelayResult reason = system.Blockchain.Ask<RelayResult>(block).Result;
             return GetRelayResult(reason.Result, block.Hash);
         }

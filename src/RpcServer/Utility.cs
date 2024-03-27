@@ -1,8 +1,9 @@
-// Copyright (C) 2015-2023 The Neo Project.
+// Copyright (C) 2015-2024 The Neo Project.
 //
-// The Neo.Network.RPC is free software distributed under the MIT software license,
-// see the accompanying file LICENSE in the main directory of the
-// project or http://www.opensource.org/licenses/mit-license.php
+// Utility.cs file belongs to the neo project and is free
+// software distributed under the MIT software license, see the
+// accompanying file LICENSE in the main directory of the
+// repository or http://www.opensource.org/licenses/mit-license.php
 // for more details.
 //
 // Redistribution and use in source and binary forms with or without
@@ -32,14 +33,17 @@ namespace Neo.Plugins
             return json;
         }
 
-        public static JObject NativeContractToJson(this NativeContract contract, ProtocolSettings settings)
+        public static JObject NativeContractToJson(this NativeContract contract, NeoSystem system)
         {
+            var state = contract.GetContractState(system.Settings,
+                NativeContract.Ledger.CurrentIndex(system.StoreView));
+
             return new JObject
             {
                 ["id"] = contract.Id,
                 ["hash"] = contract.Hash.ToString(),
-                ["nef"] = contract.Nef.ToJson(),
-                ["manifest"] = contract.Manifest.ToJson()
+                ["nef"] = state.Nef.ToJson(),
+                ["manifest"] = state.Manifest.ToJson()
             };
         }
     }
